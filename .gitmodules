@@ -1,0 +1,3 @@
+[submodule "sgetool/libfourier"]
+	path = sgetool/libfourier
+	url = https://github.com/Aikku93/libfourier

@@ -1,0 +1,8 @@
+example-nds/*
+sgetool/build/*
+sgetool/release/*
+libsge/build-gba/*
+libsge/build-nds7/*
+libsge/build-nds9/*
+libsge/release/*
+libsge/source-pc/*

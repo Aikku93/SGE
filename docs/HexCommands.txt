@@ -1,0 +1,472 @@
+WIP. Not checked, likely incomplete.
+
++------------------------------------------------------------------------------+
+|                                     SGE                                      |
+|                            HEX COMMANDS REFERENCE                            |
++-------+-------------------------------------------------+--------------------+
+| Code  | Description                                     | Argument[s]        |
++-------+-------------------------------------------------+--------------------+
+| 0h    | Note (time-coded)                               | Length  (TimeCode) |
+| 1h    | Note (with duration from last 0h command)       | Notes   (NoteCode) |
+| 2h    | Note (1/4)                                      | Notes   (NoteCode) |
+| 3h    | Note (1/8)                                      | Notes   (NoteCode) |
+| 4h    | Note (1/16)                                     | Notes   (NoteCode) |
+| 5h    | Note (1/32)                                     | Notes   (NoteCode) |
+| 6h    | Note (1/64)                                     | Notes   (NoteCode) |
+| 7h    | Rest                                            | Length  (TimeCode) |
+| 8h    | Octave                                          | [Variable]         |
+| 9h    | Velocity                                        | Value   (RampByte) |
+| Ah    | Volume                                          | Value   (RampByte) |
+| Bh    | Expression                                      | Value   (RampByte) |
+| Ch    | Panning                                         | Value   (RampByte) |
+| Dh    | PitchBend                                       | Value   (RampWord) |
+| Eh,0h | PortamentoOn                                    | [N/A]              |
+| Eh,1h | PortamentoOff                                   | [N/A]              |
+| Eh,2h | RepeatStart                                     | [N/A]              |
+| Eh,3h | [Unallocated]                                   |                    |
+| Eh,4h | [Unallocated]                                   |                    |
+| Eh,5h | [Unallocated]                                   |                    |
+| Eh,6h | [Unallocated]                                   |                    |
+| Eh,7h | [Unallocated]                                   |                    |
+| Eh,8h | [Unallocated]                                   |                    |
+| Eh,9h | [Unallocated]                                   |                    |
+| Eh,Ah | [Unallocated]                                   |                    |
+| Eh,Bh | [Unallocated]                                   |                    |
+| Eh,Ch | [Unallocated]                                   |                    |
+| Eh,Dh | [Unallocated]                                   |                    |
+| Eh,Eh | [Unallocated]                                   |                    |
+| Eh,Fh | [Unallocated]                                   |                    |
+| Fh,0h | Transpose                                       | Value   (ByteCode) |
+| Fh,1h | Transpose (relative)                            | Value   (ByteCode) |
+| Fh,2h | NoteLengthMod                                   | [Variable]         |
+| Fh,3h | Priority                                        | Value   (HalfByte) |
+| Fh,4h | Program                                         | Value   (ByteCode) |
+| Fh,5h | Tempo                                           | Value   (TempoVal) |
+| Fh,6h | Jump                                            | Offset  (SeekAddr) |
+| Fh,7h | Repeat                                          | ???????
+| Fh,8h | Call                                            | ???????
+| Fh,9h | Call (with counter)                             | ???????
+| Fh,Ah | GotoIf                                          | ???????
+| Fh,Bh | Signal                                          | ???????
+| Fh,Ch | Break                                           | ???????
+| Fh,Dh | Return                                          | [N/A]              |
+| Fh,Eh | PatternStart                                    | [N/A]              |
+| Fh,Fh | End                                             | [N/A]              |
++-------+---------------------------------------------------------------------+
+
++------------------------------------------------------------------------------+
+|                                   COMMANDS                                   |
++------------------------------------------------------------------------------+
+
+0h..6h: Note
+------------
+
+This command issues key-on events.
+
+Command 0h is followed by a note duration specified as a TimeCode; all notes
+started from this command will end after the specified duration has elapsed.
+This command must save the specified duration to the track state, such that it
+may be re-used with command 1h; this allows repeating a non-standard duration
+(such as dotted notes or triplets) without explicitly coding durations for all
+note events, as this would require more data to be stored in the sequence.
+
+Commands 1h..6h behave identically, but no duration is specified - it is either
+part of the command (2h..6h), or obtained from the track state (1h).
+
+Following the duration (if any), all notes to be played are listed, using the
+NoteCode formatting.
+
+If the NoteCode does not signal the Overlay flag, then following this command,
+the track will rest for the duration of this note before processing more data.
+Otherwise, the track will continue processing more commands until either the
+track ends (command Fh,Fh), or a rest is encountered (either from an explicit
+Rest command (7h), or a Note command without an Overlay flag).
+
+7h: Rest
+--------
+
+This command is followed by a TimeCode duration. The track will stop processing
+further commands until this duration has expired, and will then resume.
+
+8h: Octave
+----------
+
+This command modifies the current octave.
+
+Values 0h..Ah explicitly set the octave to use for any notes following this
+command.
+
+A value of Bh signals a relative octave change, in which case a signed nybble
+is read, and this is added to the current octave.
+
+Similarly, commands Ch..Fh deal in relative octave changes:
+ -Ch: One octave down
+ -Dh: One octave up
+ -Eh: Two octaves down
+ -Fh: Two octaves up
+
+9h..Dh: Controllers
+-------------------
+
+These commands adjust controller values for various parameters. All controllers
+can be ramped, bearing in mind that the maximum ramp time is 256 ticks. If a
+longer ramp is needed, ramp commands may be chained together, separated by rest
+commands as needed.
+
+All of the following control commands are followed by a RampByte specifying the
+values, except for PitchBend, which is followed by a RampWord.
+
+The Velocity controller (via command 9h) controls the velocity saved in the
+track state, to be used with Note commands that do not specify an explicit
+velocity. Different velocities may map to different (or even multiple) tone
+layers, and is part of the synthesizer model.
+Initial value: 100 (1..128, offset = 1).
+
+The Volume controller (via command Ah) controls the track volume, and is part
+of the synthesizer model. This is primarily intended for volume balancing.
+Initial value: 100 (1..128, offset = 1).
+
+The Expression controller (via command Bh) is a secondary track volume control,
+intended to control performance articulation volume (eg. volume fades, etc.).
+Initial value: 128 (1..128, offset = 1).
+
+The Panning controller (via command Ch) controls the stereo position of all the
+notes associated with a track. Note that this panning position is NOT a linear
+fade between left and right, but should be at least an approximation to the
+equal-power curve. More specifically:
+ -V_l = Cos[Pan/63 * Pi/2]
+ -V_r = Sin[Pan/63 * Pi/2]
+Initial value: 64 (1..127, offset = 1; 1 = Left, 64 = Center, 127 = Right).
+
+The PitchBend controller (via command Dh) controls the amount of pitch-bending
+to apply to all notes associated with this track. In effect, this results in
+transposition (both coarse and fine) of notes, without affecting key splits.
+This value is centered about 8192 (2000h), with lower values specifying a bend
+towards lower notes, and higher values specifying a bend towards higher notes.
+Each multiple step of 80h specifies a semitone to detune by, and the lower 7
+bits specify the fine-tuning to apply to the bend.
+Initial value: 2000h (0001h .. 3FFFh = -1FFFh..+1FFFh = -127.98 .. +127.98)
+
+When a note expires, the state of all controllers is saved to the voice state
+such that further updates to the track do not reflect on the voice that is in
+its release phase. Note that saving of the state must occur prior to processing
+track events on the tick that notes expired on; this is so that, for example,
+if a track is performing a volume fade into silence, followed by immediately
+resetting the volume back to full strength at the end of the fade, then any
+notes that expire on the same tick that the volume was reset do not receive the
+volume reset.
+
+Eh,0h..1h: PortamentoOn/PortamentoOff
+-------------------------------------
+
+This command enables or disables portamento mode, allowing a voice to sweep
+between notes using standard note syntax instead of pitch slides.
+
+Note that if a note is already playing for this track when PortamentoOn is
+used, then that note will NOT have the effect applied; this effect only applies
+to notes that come AFTER the PortamentoOn command.
+
+Eh,2h: RepeatStart
+------------------
+
+This is a supplementary command that is needed to keep synchronization of the
+track nesting level when combined with Break commands (Fh,Ch).
+
+If a Repeat section doesn't use Break commands, this command is NOT required.
+
+Eh,3h..Fh: Unallocated
+----------------------
+
+These command slots currently map to the End command (Fh,Fh), and are reserved
+for future expansion.
+
+Fh,0h..1h: Transpose
+------------------------
+
+These commands modify the key values of all note events before any processing
+happens with them, in effect resulting in the played key being changed prior to
+even instrument region matching. Note that any keys that fall out of the range
+of 0..127 will be ignored and will NOT play.
+Initial value: 0 (-127 .. +127).
+
+Relative transposition (Fh,1h) will add the transposition amount to the current
+transposition. The compiler must ensure that overflow does not occur.
+
+Fh,2h: NoteLengthMod
+--------------------
+
+To produce legato or staccato effects, note durations may be modified with
+these commands, without needing to explicitly notate these effects. The
+command values are saved in the track state and apply to all subsequent notes.
+Initial value: Mul = 32 (1..256; 32 = 1.0x), Add = 0 (-128..+127).
+
+The order of operations is:
+  Final Duration = Duration * DurationMul + DurationAdd
+
+Should the final duration of a note result in 0 ticks or lower, this must be
+clipped to 1 tick, so as to ensure that the note plays at all.
+
+Note that the final duration may exceed 65536 ticks. It is acceptable to either
+clip this, or to accept the larger duration, depending on the implementation.
+
+This command is specified by first parsing a byte, where the upper 7 bits are
+the Mul value. If the lowest bit is 0, then Add is set to 0. Otherwise, Add is
+interpreted as a signed ByteCode.
+
+Fh,3h: Priority
+---------------
+
+When using many voices simultaneously, it may become necessary to "steal" an
+active voice in order to fullfil a key-on event. While the internal logic will
+try to select a voice to steal intelligently, providing an explicit priority to
+a track can give further hints as to which voice may be stolen first.
+Initial value: 8 (0..15, 0 = Lowest, 15 = Highest).
+
+The relative importance of a track priority relative to all other parameters
+considered for voice stealing is implementation-dependent.
+
+Fh,4h: Program Change
+---------------------
+
+This command selects the program/instrument to use for subsequent notes.
+Initial value: Program 0.
+
+If a track selects an invalid program, no key-on events are issued.
+
+Fh,5h: Tempo
+------------
+
+This command controls the playback speed of the player associated with the
+track that issued the command.
+Initial value: 120BPM (1 .. 1024BPM).
+
+Ramping can be applied, and the command can be issued by any track. However, if
+two such commands are issued and collide with one another (eg. one track issues
+a ramped tempo, and another track then issues a different ramp), the last event
+to occur will be used (which will correspond to the last track to issue it).
+
+Fh,6h..Ah, Fh,Ch..Dh: Control Flow
+----------------------------------
+
+These commands deal with the flow of events, and can be used to seek to other
+locations in a track (or even any sequence data in a sequence).
+
+Jump (Fh,6h) is an unconditional jump to a different location, and is generally
+used for looping a sequence indefinitely.
+
+Repeat (Fh,7h) is used to repeat a section of a track for a specified number of
+repetitions, and is useful when a section is very repetitive, but once only.
+This command will result in repeating everything from the seek target up until
+the repeat command, until the number of repetitions has elapsed.
+Range: 1..256 repetitions (corresponding to playing the section 2..257 times).
+See also RepeatStart (Eh,2h).
+
+Call (Fh,8h) is similar to Repeat, but instead of repeating until the command
+is encountered again, control flow is returned to the next command proceeding
+the Call event upon encountering a Return (Fh,Dh) command in the called data.
+Call with counter (Fh,9h) is identical to a standard Call command, but repeats
+the Call event for the specified number of repetitions.
+Range: 1..256 repeated invocations.
+
+GotoIf (Fh,Ah) is similar to Jump (Fh,6h), but will only seek to the target
+when the external handler event returns a TRUE value. The mechanism is to pass
+some data to the external handler, and it will decide whether or not the jump
+command is to proceed. Note that if no external handler is associated with a
+player, the condition is always FALSE and the jump is not taken.
+
+Break (Fh,Ch) is used to signal that upon the last repetition of a repeat
+section or pattern, anything past the command must be skipped.
+
+Return (Fh,Dh) is used to mark the end of a sequence that may be reached via a
+Call command (Fh,8h..9h).
+
+Note that during any jump event, no state is saved other than the return point
+(if any); if anything needs to be saved/reset (such as volume controls), this
+must be done manually by the user.
+
+Fh,Bh: Signal
+-------------
+
+This command is generally used to notify the parent program of an event that
+has occurred in a song, by making use of the external handler. Any return value
+from the handler is ignored.
+
+Fh,Eh: PatternStart
+-------------------
+
+This is a supplementary command that is needed to keep synchronization of the
+track nesting level when combined with Break commands (Fh,Ch).
+
+If a pattern doesn't use Break commands, this command is NOT required.
+
+Fh,Fh: End of Track
+-------------------
+
+This command signals that the track that issued the command has ended, and no
+further commands follow. If all tracks have ended, then the associated player
+is considered to have stopped playing.
+
+Note that any notes still playing after this command may or may not terminate,
+depending on the implementation.
+
++------------------------------------------------------------------------------+
+|                                 DATA FORMATS                                 |
++------------------------------------------------------------------------------+
+
+HalfByte
+--------
+
+Xh: Data
+
+ByteCode
+--------
+
+Xh,Yh: Unpack as Xh<<4 | Yh
+
+WordCode
+--------
+
+Xh,Yh,Zh,Wh: Unpack as Xh<<12 | Yh<<8 | Zh<<4 | Wh
+
+RampByte
+--------
+
+Read a ByteCode value:
+ Bit0:    Ramp (1 = Ramped)
+ Bit1..7: Data
+If Ramped, then read a TimeCode; this is the ramp time until this value takes
+full effect.
+
+NOTE: The maximum time available for a ramp is 256 ticks. Attempting to specify
+a longer ramp is a syntax error. If a ramp needs to be longer, then multiple
+Ramp commands may be chained one after the other, separated by the rests.
+This applies to ALL ramped values.
+
+RampWord
+--------
+
+Read a WordCode value:
+ Bit0:     Ramp (1 = Ramped)
+ Bit1..15: Data
+If Ramped, then read a TimeCode; this is the ramp time until this value takes
+full effect.
+
+NoteCode
+--------
+
+0h: C
+1h: C#
+2h: D
+3h: D#
+4h: E
+5h: F
+6h: F#
+7h: G
+8h: G#
+9h: A
+Ah: A#
+Bh: B
+Ch: Octave down
+Dh: Octave up
+Eh: Overlay
+Fh,0h,Xh,Yh: Velocity change
+Fh,1h..Bh:   OctaveSet
+Fh,Ch..Fh:   StackPush
+
+Octave down/up (Ch..Dh) changes the current octave. Selecting an octave outside
+the range of 0..10 is considered a syntax error and does not need to be guarded
+against. Also note that the highest note possible is on octave 10, note G,
+corresponding to MIDI note 127. Going higher than this is also considered to be
+a syntax error, and does not need guarding.
+
+Overlay (Eh) signifies that the track should not rest after interpreting this
+note command, but should instead continue processing. This command should only
+appear once, before any notes are provided (ie. immediately following the note
+command that this flag resides in).
+
+Velocity change (Fh,0h,Xh,Yh) sets the velocity for the proceeding note[s]. The
+value is unpacked as Yh|Xh<<4, with the following interpretation:
+ Bit0:    Sticky   (0 = Only for the following note, 1 = Save to state)
+ Bit1..7: Velocity (0..127 = 1..128)
+Note that Sticky will disable any velocity ramp currently operating.
+
+Octave change (Fh,1h..Bh) is self-explanatory. Octave 5 (Fh,6h) selects the
+middle-C/A440 octave, corresponding to MIDI notes 60..71.
+
+StackPush (Fh,Ch..Fh) adds up to 4 extra notes to play with the same command.
+This command must only appear immediately before what would otherwise be the
+last note to be decoded for this note command. Specifying this command while
+the stack queue is larger than 1 note is a syntax error.
+
+TimeCode
+--------
+
+Each quarter note is precisely defined to be 48 ticks in duration.
+
+0h:    1/1    (192 ticks)
+1h:    1/2    ( 96 ticks)
+2h:    1/4    ( 48 ticks)
+3h:    1/8    ( 24 ticks)
+4h:    1/16   ( 12 ticks)
+5h:    1/32   (  6 ticks)
+6h:    1/64   (  3 ticks)
+7h:    1/1    (192 ticks) (tied)
+8h:    1/2    ( 96 ticks) (tied)
+9h:    1/4    ( 48 ticks) (tied)
+Ah:    1/8    ( 24 ticks) (tied)
+Bh:    1/16   ( 12 ticks) (tied)
+Ch:    1/32   (  6 ticks) (tied)
+Dh:    1/64   (  3 ticks) (tied)
+Eh,0h: 1/1    (128 ticks) (triplet)
+Eh,1h: 1/2    ( 64 ticks) (triplet)
+Eh,2h: 1/4    ( 32 ticks) (triplet)
+Eh,3h: 1/8    ( 16 ticks) (triplet)
+Eh,4h: 1/16   (  8 ticks) (triplet)
+Eh,5h: 1/32   (  4 ticks) (triplet)
+Eh,6h: 1/64   (  2 ticks) (triplet)
+Eh,7h: 1/1    (128 ticks) (tied triplet)
+Eh,8h: 1/2    ( 64 ticks) (tied triplet)
+Eh,9h: 1/4    ( 32 ticks) (tied triplet)
+Eh,Ah: 1/8    ( 16 ticks) (tied triplet)
+Eh,Bh: 1/16   (  8 ticks) (tied triplet)
+Eh,Ch: 1/32   (  4 ticks) (tied triplet)
+Eh,Dh: 1/64   (  2 ticks) (tied triplet)
+Eh,Eh: 1/128  (  1 ticks) (triplet)
+Eh,Fh: 1/128  (  1 ticks) (tied triplet)
+Fh,WordCode: Tick-coded duration (0..65535 = 1..65536 ticks)
+
+When using Fh,WordCode, it is a syntax error to precede it with another value.
+
+All tied timecodes will continue appending a duration until a non-tied timecode
+is reached. The final value of a TimeCode must not exceed 65536 ticks.
+
+When specified as part of a note with a TimeCode (0h), the duration is saved to
+the internal state, such that it can be re-used with command 1h.
+
+TempoVal
+--------
+
+Xh,Yh,Zh: Unpack as Xh<<8 | Yh<<4 | Zh
+ Bit0:     Ramp (1 = Ramped)
+ Bit1..11: Data (0..1023 = 1..1024BPM)
+If Ramped, then read a TimeCode; this is the ramp time until this value takes
+full effect.
+
+SeekAddr
+--------
+
+All bytes are unpacked from ByteCode values.
+
+First, a packed representation of the relative offset is decoded:
+  00h..FCh:        00000000h..000000FCh (000000h + XX)
+  FDh,XXh:         000000FDh..000001FCh (0000FDh + XX)
+  FEh,XXh,YYh:     000001FDh..000101FCh (0001FDh + YY + XX<<8)
+  FFh,XXh,YYh,ZZh: 000101FDh..010101FCh (0101FDh + ZZ + YY<<8 + XX<<16)
+
+Next, this number is taken to be a sign-magnitude representation of the actual
+relative offset. The least-significant bit denotes the sign (0=Neg, 1=Pos), and
+the remaining most-significant bits denotes the magnitude, offset by 4 (that is
+to say, a value of 4 should be added to the magnitude before sign adjustment).
+
+To find the target address, this value is then added to the current position of
+the nybble stream (that is, the position after decoding the last ByteCode).
