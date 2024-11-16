@@ -413,6 +413,7 @@ int SGE_LocalDb_Export(struct SGE_LocalDb_t *Db, FILE *SGEFile, FILE *WavFile, c
 		SRCConfig.GlobalGain      = (float)WavOpt->WavGlobalGain;
 		SRCConfig.HighShelfGain   = (float)WavOpt->WavHighShelfGain;
 		SRCConfig.DitherLevel     = (float)WavOpt->SRCDitherLevel;
+		SRCConfig.NoiseShapeLevel = (float)WavOpt->SRCNoiseShapeLevel;
 		fseek(WavFile, Wav->FileOffs, SEEK_SET);
 		if(!SRC_ConvertStreamedData(
 			SGEFile,

@@ -53,6 +53,7 @@ struct SRC_Config_t {
 	float    GlobalGain;
 	float    HighShelfGain;
 	float    DitherLevel;
+	float    NoiseShapeLevel;
 
 	//! CustomWrite() must return 0 on failure, and 1 on success
 	void *CustomWrite_Userdata;

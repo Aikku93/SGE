@@ -195,10 +195,13 @@ static const char *HelpString =
 	"                      * nuttall  (Sinc x Nuttall)\n"
 	"                      * lanczos  (Sinc x Lanczos)\n"
 	"                      * lanczos2 (Sinc x Lanczos^2)\n"
-	" -src-dither:1.0    - Set quantization dithering level. This is used when any\n"
+	" -src-dither:0.1    - Set quantization dithering level. This is used when any\n"
 	"                      resampling needs to take place, or the output bit-depth\n"
 	"                      is lower than the input bit-depth. A level of 0.0 will\n"
 	"                      disable dithering, and 1.0 will enable full dithering.\n"
+	" -src-nzshape:1.0   - Set noise shaping level. A value of 0.0 will not use any\n"
+	"                      noise shaping, while a value of 1.0 will use the maximum\n"
+	"                      amount of noise shaping, shifting distortion towards DC.\n"
 ;
 
 /************************************************/
@@ -316,7 +319,8 @@ int main(int argc, const char *argv[]) {
 	Options.WavHighShelfGain      = 1.0;
 	Options.WavGlobalGain         = 1.0;
 	Options.WavGainAdjust         = 1.0;
-	Options.SRCDitherLevel        = 1.0;
+	Options.SRCDitherLevel        = 0.1;
+	Options.SRCNoiseShapeLevel    = 1.0;
 
 	//! Initialize local database
 	SGE_LocalDb_Init(&LocalDb);

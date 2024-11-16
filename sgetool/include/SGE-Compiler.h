@@ -123,6 +123,7 @@ struct SGE_gOptions_t {
 	double   WavGlobalGain;
 	double   WavGainAdjust;
 	double   SRCDitherLevel;
+	double   SRCNoiseShapeLevel;
 };
 
 /************************************************/

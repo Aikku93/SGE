@@ -372,6 +372,19 @@ int SGE_ParseOptions(
 			if(!Parsed || !Success) {
 				if(ErrorLogger) ErrorLogger(ErrorLogger_Userdata, "ERROR: Invalid SRC dither level (-src-dither:%s).\n", LevelStr);
 			}
+		} else if(OPT_MATCH("-src-nzshape:")) {
+			double Level;
+			const char *LevelStr = OptStr;
+			if(!SGE_ReadDouble(&Level, OptStr, &OptStr)) {
+				Parsed = 0;
+			} else if(Level < 0.0 || Level > 1.0) {
+				Success = 0;
+			} else {
+				Options->SRCNoiseShapeLevel = Level;
+			}
+			if(!Parsed || !Success) {
+				if(ErrorLogger) ErrorLogger(ErrorLogger_Userdata, "ERROR: Invalid SRC noise shaping level (-src-nzshape:%s).\n", LevelStr);
+			}
 		} else {
 			Parsed = 0;
 
