@@ -23,8 +23,8 @@ static int MML_ParseCommand(struct MML_t *MML) {
 	//! Have global command?
 	if(MML->nTracks == 0 && Command == '$') {
 		MML_ConsumeChars(MML, 1, 0);
-		if(MML_PeekStringMatch(MML, "timemul"))      return MML_Command_Global_TimeMul(MML);
-		if(MML_PeekStringMatch(MML, "ticksperbeat")) return MML_Command_Global_TicksPerBeat(MML);
+		if(MML_StringMatchAndConsume(MML, "tpq",          1)) return MML_Command_Global_TicksPerBeat(MML);
+		if(MML_StringMatchAndConsume(MML, "ticksperbeat", 1)) return MML_Command_Global_TicksPerBeat(MML);
 		MML_AppendErrorCurrentOffset(MML, "Expected global command following '$' symbol.");
 		return MML_ERROR;
 	}
@@ -92,13 +92,15 @@ static int MML_ParseCommand(struct MML_t *MML) {
 
 	//! Special commands
 	if(Command == '$') {
-		if(MML_PeekStringMatch(MML, "priority"))   return MML_Command_Priority  (MML);
-		if(MML_PeekStringMatch(MML, "transpose"))  return MML_Command_Transpose (MML);
-		if(MML_PeekStringMatch(MML, "portamento")) return MML_Command_Portamento(MML);
-		if(MML_PeekStringMatch(MML, "gotoif"))     return MML_Command_GotoIf    (MML);
-		if(MML_PeekStringMatch(MML, "signal"))     return MML_Command_Signal    (MML);
-		if(MML_PeekStringMatch(MML, "goto"))       return MML_Command_Goto      (MML);
-		if(MML_PeekStringMatch(MML, "end"))        return MML_Command_End       (MML);
+		if(MML_StringMatchAndConsume(MML, "priority",   1)) return MML_Command_Priority  (MML);
+		if(MML_StringMatchAndConsume(MML, "transpose",  1)) return MML_Command_Transpose (MML);
+		if(MML_StringMatchAndConsume(MML, "t",          1)) return MML_Command_Transpose (MML);
+		if(MML_StringMatchAndConsume(MML, "portamento", 1)) return MML_Command_Portamento(MML);
+		if(MML_StringMatchAndConsume(MML, "p",          1)) return MML_Command_Portamento(MML);
+		if(MML_StringMatchAndConsume(MML, "gotoif",     1)) return MML_Command_GotoIf    (MML);
+		if(MML_StringMatchAndConsume(MML, "signal",     1)) return MML_Command_Signal    (MML);
+		if(MML_StringMatchAndConsume(MML, "goto",       1)) return MML_Command_Goto      (MML);
+		if(MML_StringMatchAndConsume(MML, "end",        1)) return MML_Command_End       (MML);
 		MML_AppendErrorCurrentOffset(MML, "Expected command following '$' symbol.");
 		return MML_ERROR;
 	}

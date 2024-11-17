@@ -331,7 +331,7 @@ static int MML_ParseController(
 	int ValueDiv
 ) {
 	//! Check for sweep without immediate
-	if(!MML_PeekStringMatch(MML, "->")) {
+	if(!MML_PeekStringMatch(MML, "->", 0)) {
 		//! If we don't match `->`, then we need to parse the immediate value
 		int Value = MML_ParseController_ParseValue(MML, Min, Max, ValueMul, ValueDiv, Scale);
 		if(Value == MML_ERROR) return MML_ERROR;
@@ -339,7 +339,7 @@ static int MML_ParseController(
 	}
 
 	//! If we have a sweep, apply that next
-	if(MML_PeekStringMatch(MML, "->")) {
+	if(MML_PeekStringMatch(MML, "->", 0)) {
 		MML_ConsumeChars(MML, strlen("->"), 0);
 
 		//! Read the target value

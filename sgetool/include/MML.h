@@ -228,8 +228,7 @@ struct MML_t {
 	MML_NotifyKeyOnFnc_t NotifyKeyOn;
 
 	//! Global state
-	int32_t TimeMul;
-	int32_t TimeDiv;
+	int32_t TicksPerBeat;
 
 	//! Current track state
 	struct {
@@ -372,8 +371,15 @@ void MML_ConsumeWhitespace(struct MML_t *MML) {
 int MML_PeekNextChar(const struct MML_t *MML);
 
 //! Check if the following characters match a string
+//! When AsToken != 0, then a match is successful only if the next character
+//! following the string is not alphanumeric.
 //! Returns 0 on no match, 1 on match
-int MML_PeekStringMatch(const struct MML_t *MML, const char *String);
+int MML_PeekStringMatch(const struct MML_t *MML, const char *String, uint8_t AsToken);
+
+//! Check if the following characters match a string, and consume on success
+//! Exactly the same as MML_PeekStringMatch(), but includes consuming the characters.
+//! Returns 0 on no match, 1 on match
+int MML_StringMatchAndConsume(struct MML_t *MML, const char *String, uint8_t AsToken);
 
 //! Consume one character and peek the next
 //! NOTE: This does NOT consume whitespace.

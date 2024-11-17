@@ -35,8 +35,7 @@ int MML_Init(
 	MML->NotifyUserdata          = NotifyUserdata;
 	MML->NotifyMIDIProgramChange = NotifyMIDIProgramChange;
 	MML->NotifyKeyOn             = NotifyKeyOn;
-	MML->TimeMul     = 1;
-	MML->TimeDiv     = 1;
+	MML->TicksPerBeat = MML_TICKS_PER_QUARTER_NOTE;
 	MML->Input.Data  = Data;
 	MML->Input.Size  = DataSize;
 	MML->Input.Offs.DataOffs = 0;
@@ -135,6 +134,29 @@ void MML_ConsumeChars(struct MML_t *MML, uint32_t nChars, uint8_t ConsumeWhitesp
 
 /************************************************/
 
+//! Perform string matching (with optional tokenization and consumption)
+static int MML_StringMatch(struct MML_t *MML, const char *String, uint8_t AsToken, uint8_t Consume) {
+	uint32_t Length = strlen(String);
+	if(MML->Input.Offs.DataOffs+Length <= MML->Input.Size) {
+		if(memcmp(MML->Input.Data + MML->Input.Offs.DataOffs, String, Length) == 0) {
+			uint8_t IsMatch;
+			if(AsToken) {
+				//! Must match a token, so check that next char is not alphanum
+				IsMatch = 0;
+				if(MML->Input.Offs.DataOffs+Length < MML->Input.Size) {
+					uint8_t c = MML->Input.Data[MML->Input.Offs.DataOffs + Length];
+					if(!MML_IS_ALPHANUM(c)) IsMatch = 1;
+				}
+			} else IsMatch = 1;
+			if(IsMatch) {
+				if(Consume) MML_ConsumeChars(MML, Length, 0);
+				return 1;
+			}
+		}
+	}
+	return 0;
+}
+
 //! Peek at next character without advancing
 int MML_PeekNextChar(const struct MML_t *MML) {
 	if(MML->Input.Offs.DataOffs < MML->Input.Size) {
@@ -143,11 +165,13 @@ int MML_PeekNextChar(const struct MML_t *MML) {
 }
 
 //! Check if the following characters match a string
-int MML_PeekStringMatch(const struct MML_t *MML, const char *String) {
-	uint32_t Length = strlen(String);
-	if(MML->Input.Offs.DataOffs+Length <= MML->Input.Size) {
-		return (memcmp(MML->Input.Data + MML->Input.Offs.DataOffs, String, Length) == 0) ? 1 : 0;
-	} else return 0;
+int MML_PeekStringMatch(const struct MML_t *MML, const char *String, uint8_t AsToken) {
+	return MML_StringMatch((struct MML_t*)MML, String, AsToken, 0);
+}
+
+//! Check if the following characters match a string, and consume on success
+int MML_StringMatchAndConsume(struct MML_t *MML, const char *String, uint8_t AsToken) {
+	return MML_StringMatch(MML, String, AsToken, 1);
 }
 
 /************************************************/
@@ -312,17 +336,6 @@ static int32_t MML_ReadNestedDuration(struct MML_t *MML, uint32_t NestLevel) {
 				MML_AppendError(MML, "Number of ticks cannot be 0.", &ThisDurationOffs);
 				return MML_ERROR;
 			}
-			int64_t Ticks     = ThisDuration * (int64_t)MML->TimeMul / MML->TimeDiv;
-			int64_t Remainder = ThisDuration * (int64_t)MML->TimeMul % MML->TimeDiv;
-			if(Remainder != 0) {
-				MML_AppendError(MML, "Non-integer number of ticks after time scaling.", &ThisDurationOffs);
-				return MML_ERROR;
-			}
-			if(Ticks != (int32_t)Ticks) {
-				MML_AppendError(MML, "Internal overflow (duration became too large).", &ThisDurationOffs);
-				return MML_ERROR;
-			}
-			ThisDuration = (int32_t)Ticks;
 		} else if(MML_IS_DIGIT(NextChar)) {
 			//! Read the divisor
 			int Divisor = MML_ReadDecimalOrHex(MML);
@@ -336,17 +349,13 @@ static int32_t MML_ReadNestedDuration(struct MML_t *MML, uint32_t NestLevel) {
 				MML_AppendError(MML, "Time divisor cannot be 0.", &ThisDurationOffs);
 				return MML_ERROR;
 			}
-			int64_t Ticks     = (MML_TICKS_PER_WHOLE_NOTE * (int64_t)MML->TimeMul) / (Divisor*MML->TimeDiv);
-			int64_t Remainder = (MML_TICKS_PER_WHOLE_NOTE * (int64_t)MML->TimeMul) % (Divisor*MML->TimeDiv);
+			int Ticks     = (MML->TicksPerBeat * 4) / Divisor;
+			int Remainder = (MML->TicksPerBeat * 4) % Divisor;
 			if(Remainder != 0) {
 				MML_AppendError(MML, "Divisor does not result in integer number of ticks.", &ThisDurationOffs);
 				return MML_ERROR;
 			}
-			if(Ticks != (int32_t)Ticks) {
-				MML_AppendError(MML, "Internal overflow (duration became too large).", &ThisDurationOffs);
-				return MML_ERROR;
-			}
-			ThisDuration = (int32_t)Ticks;
+			ThisDuration = Ticks;
 		} else ThisDuration = MML->State.Duration;
 
 		//! Check for dotted notes
@@ -358,7 +367,7 @@ static int32_t MML_ReadNestedDuration(struct MML_t *MML, uint32_t NestLevel) {
 				return MML_ERROR;
 			}
 			DottedAddition /= 2;
-			int64_t NewDuration = ThisDuration + (int64_t)DottedAddition;
+			int64_t NewDuration = (int64_t)ThisDuration + (int64_t)DottedAddition;
 			if(NewDuration != (int32_t)NewDuration) {
 				MML_AppendError(MML, "Internal overflow (duration became too large).", &ThisDurationOffs);
 				return MML_ERROR;
@@ -377,7 +386,7 @@ static int32_t MML_ReadNestedDuration(struct MML_t *MML, uint32_t NestLevel) {
 				MML_AppendErrorContext(MML, "While parsing duration multiplier:");
 				return MML_ERROR;
 			}
-			int64_t ScaledDuration = ThisDuration * (int64_t)Mul;
+			int64_t ScaledDuration = (int64_t)ThisDuration * (int64_t)Mul;
 			if(ScaledDuration != (int32_t)ScaledDuration) {
 				MML_AppendError(MML, "Internal overflow (duration became too large).", &ThisMulOffs);
 				return MML_ERROR;
@@ -386,7 +395,7 @@ static int32_t MML_ReadNestedDuration(struct MML_t *MML, uint32_t NestLevel) {
 		}
 
 		//! Add to final duration
-		int64_t FinalDuration = Duration + (int64_t)MML_ApplySign(ThisDuration, Sign);
+		int64_t FinalDuration = (int64_t)Duration + (int64_t)MML_ApplySign(ThisDuration, Sign);
 		if(FinalDuration != (int32_t)FinalDuration) {
 			MML_AppendError(MML, "Internal overflow (duration overflow/underflow).", &ThisDurationOffs);
 			return MML_ERROR;

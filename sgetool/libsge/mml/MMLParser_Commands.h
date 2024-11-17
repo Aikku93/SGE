@@ -397,7 +397,7 @@ static int MML_Command_PitchBend(struct MML_t *MML) {
 /************************************************/
 
 static int MML_Command_Tempo(struct MML_t *MML) {
-	int Result = MML_ParseController(MML, MML_CMD_TEMPO, 12, 1, 1024, 1.0, (int)MML->TimeMul, (int)MML->TimeDiv);
+	int Result = MML_ParseController(MML, MML_CMD_TEMPO, 12, 1, 1024, 1.0, MML->TicksPerBeat, MML_TICKS_PER_QUARTER_NOTE);
 	if(Result == MML_ERROR) {
 		MML_AppendErrorContext(MML, "While parsing tempo controller:");
 	}
@@ -936,7 +936,7 @@ static int MML_Command_Label(struct MML_t *MML) {
 
 static int MML_Command_Priority(struct MML_t *MML) {
 	//! NOTE: Allow whitespace between $cmd and =
-	MML_ConsumeChars(MML, strlen("priority"), 1);
+	MML_ConsumeWhitespace(MML);
 	if(MML_PeekNextChar(MML) != '=') {
 		MML_AppendErrorCurrentOffset(MML, "Expected `=`.");
 		return MML_ERROR;
@@ -967,7 +967,7 @@ static int MML_Command_Priority(struct MML_t *MML) {
 
 static int MML_Command_Transpose(struct MML_t *MML) {
 	//! NOTE: Allow whitespace between $cmd and =/+=/-=
-	MML_ConsumeChars(MML, strlen("transpose"), 1);
+	MML_ConsumeWhitespace(MML);
 	struct MML_InputOffs_t CommandOffs; MML_GetInputOffset(MML, &CommandOffs);
 
 	//! Check type of command
@@ -1043,29 +1043,13 @@ static int MML_Command_Transpose(struct MML_t *MML) {
 /************************************************/
 
 static int MML_Command_Portamento(struct MML_t *MML) {
-	//! NOTE: Allow whitespace between `( x )`, but not between `$cmd(`
-	MML_ConsumeChars(MML, strlen("portamento"), 0);
-	if(MML_PeekNextChar(MML) != '(') {
-		MML_AppendErrorCurrentOffset(MML, "Expected `(`.");
-		return MML_ERROR;
-	}
-	MML_ConsumeChars(MML, 1, 1);
-
 	//! Check for on/off
-	if(MML_PeekStringMatch(MML, "on")) {
-		MML_ConsumeChars(MML, strlen("on"), 1);
+	if(MML_PeekNextChar(MML) == '+') {
 		if(MML_WriteCommand(MML, MML_CMD_PORTAMENTO_ON) == MML_ERROR) return MML_ERROR;
-	} else if(MML_PeekStringMatch(MML, "off")) {
-		MML_ConsumeChars(MML, strlen("off"), 1);
+	} else if(MML_PeekNextChar(MML) == '-') {
 		if(MML_WriteCommand(MML, MML_CMD_PORTAMENTO_OFF) == MML_ERROR) return MML_ERROR;
 	} else {
-		MML_AppendErrorCurrentOffset(MML, "Expected `on` or `off`.");
-		return MML_ERROR;
-	}
-
-	//! Check final brace
-	if(MML_PeekNextChar(MML) != ')') {
-		MML_AppendErrorCurrentOffset(MML, "Expected `)`.");
+		MML_AppendErrorCurrentOffset(MML, "Expected `+` or `-`.");
 		return MML_ERROR;
 	}
 	MML_ConsumeChars(MML, 1, 1);
@@ -1080,13 +1064,11 @@ static int MML_Command_Goto(struct MML_t *MML) {
 	//! Ensure no patterns or repeats are being defined
 	if(MML->State.NestLevel_Current > 0) {
 		struct MML_InputOffs_t CommandOffs; MML_GetInputOffset(MML, &CommandOffs);
-		CommandOffs.DataOffs -= 1;
 		MML_AppendError(MML, "$goto() cannot be used inside a pattern/repeat section.", &CommandOffs);
 		return MML_ERROR;
 	}
 
-	//! NOTE: Allow whitespace between $cmd and ()
-	MML_ConsumeChars(MML, strlen("goto"), 1);
+	//! NOTE: Allow whitespace inside (), but not between $cmd(
 	if(MML_PeekNextChar(MML) != '(') { MML_AppendErrorCurrentOffset(MML, "Expected `(`."); return MML_ERROR; }
 	MML_ConsumeChars(MML, 1, 1);
 
@@ -1160,8 +1142,7 @@ static int MML_WritePayloadCommand(struct MML_t *MML, uint32_t Command, int Payl
 }
 
 static int MML_Command_GotoIf(struct MML_t *MML) {
-	//! NOTE: Allow whitespace between $cmd and ()
-	MML_ConsumeChars(MML, strlen("gotoif"), 1);
+	//! NOTE: Allow whitespace inside (), but not between $cmd(
 	if(MML_FlushPendingCommands(MML, 0) == MML_ERROR) return MML_ERROR;
 	if(MML_PeekNextChar(MML) != '(') { MML_AppendErrorCurrentOffset(MML, "Expected `(`."); return MML_ERROR; }
 	MML_ConsumeChars(MML, 1, 1);
@@ -1205,8 +1186,7 @@ static int MML_Command_GotoIf(struct MML_t *MML) {
 }
 
 static int MML_Command_Signal(struct MML_t *MML) {
-	//! NOTE: Allow whitespace between $cmd and ()
-	MML_ConsumeChars(MML, strlen("signal"), 1);
+	//! NOTE: Allow whitespace inside (), but not between $cmd(
 	if(MML_FlushPendingCommands(MML, 0) == MML_ERROR) return MML_ERROR;
 	if(MML_PeekNextChar(MML) != '(') { MML_AppendErrorCurrentOffset(MML, "Expected `(`."); return MML_ERROR; }
 	MML_ConsumeChars(MML, 1, 1);
@@ -1224,9 +1204,8 @@ static int MML_Command_Signal(struct MML_t *MML) {
 /************************************************/
 
 static int MML_Command_End(struct MML_t *MML) {
-	//! NOTE: Allow whitespace between $cmd and ()
+	//! NOTE: Allow whitespace inside (), but not between $cmd(
 	if(MML_FlushPendingCommands(MML, 0) == MML_ERROR) return MML_ERROR;
-	MML_ConsumeChars(MML, strlen("end"), 1);
 	if(MML_PeekNextChar(MML) != '(') { MML_AppendErrorCurrentOffset(MML, "Expected `(`."); return MML_ERROR; }
 	MML_ConsumeChars(MML, 1, 1);
 	if(MML_PeekNextChar(MML) != ')') { MML_AppendErrorCurrentOffset(MML, "Expected `)`."); return MML_ERROR; }
@@ -1234,54 +1213,26 @@ static int MML_Command_End(struct MML_t *MML) {
 	return MML_WriteCommand(MML, MML_CMD_END);
 }
 
-/************************************************/
-
-static int MML_Command_Global_TimeMul(struct MML_t *MML) {
-	//! NOTE: Allow whitespace between $cmd and = and multiplier
-	MML_ConsumeChars(MML, strlen("timemul"), 1);
-	if(MML_PeekNextChar(MML) != '=') {
-		MML_AppendErrorCurrentOffset(MML, "Expected `=`.");
-		return MML_ERROR;
-	}
-	MML_ConsumeChars(MML, 1, 1);
-	int32_t Mul = MML_ReadDecimalOrHex(MML);
-	if(Mul == MML_ERROR) {
-		MML_AppendErrorContext(MML, "While parsing global time multiplier:");
-		return MML_ERROR;
-	}
-	MML->TimeMul = Mul;
-
-	//! Now check for a divisor
-	//! NOTE: Allow whitespace between multiplier and /
-	MML_ConsumeWhitespace(MML);
-	if(MML_PeekNextChar(MML) == '/') {
-		//! NOTE: Allow whitespace between / and divisor
-		MML_ConsumeChars(MML, 1, 1);
-		int32_t Div = MML_ReadDecimalOrHex(MML);
-		if(Div == MML_ERROR) {
-			MML_AppendErrorContext(MML, "While parsing global time divider:");
-			return MML_ERROR;
-		}
-		MML->TimeDiv = Div;
-	}
-	return MML_OK;
-}
-
 static int MML_Command_Global_TicksPerBeat(struct MML_t *MML) {
 	//! NOTE: Allow whitespace between $cmd and = and the actual value
-	MML_ConsumeChars(MML, strlen("ticksperbeat"), 1);
+	MML_ConsumeWhitespace(MML);
 	if(MML_PeekNextChar(MML) != '=') {
 		MML_AppendErrorCurrentOffset(MML, "Expected `=`.");
 		return MML_ERROR;
 	}
 	MML_ConsumeChars(MML, 1, 1);
+	struct MML_InputOffs_t TicksOffs; MML_GetInputOffset(MML, &TicksOffs);
 	int32_t Ticks = MML_ReadDecimalOrHex(MML);
 	if(Ticks == MML_ERROR) {
-		MML_AppendErrorContext(MML, "While parsing global time multiplier:");
+		MML_AppendErrorContext(MML, "While parsing ticks per beat:");
 		return MML_ERROR;
 	}
-	MML->TimeMul = Ticks;
-	MML->TimeDiv = MML_TICKS_PER_QUARTER_NOTE;
+	if(Ticks > 1920) {
+		//! Arbitrary limit of 1920 ticks per quarter note
+		MML_AppendError(MML, "Ticks per beat must be at most 1920 ticks.", &TicksOffs);
+		return MML_ERROR;
+	}
+	MML->TicksPerBeat = Ticks;
 	return MML_OK;
 }
 
