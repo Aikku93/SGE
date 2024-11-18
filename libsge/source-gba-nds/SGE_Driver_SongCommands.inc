@@ -911,13 +911,9 @@ ASM_ALIGN(4)
 	LDR	r6, [r5, #0x28]    @ Ensure the voice still belongs to this track
 	CMP	r6, r2
 	BNE	.LReadNoteCommandLoop_NoteOn_LayerLoop_FindVoice_PortamentoRestart
-	MOV	r6, #0x04          @ If we JUST did a key-off earlier (ie. TicksRem == FFFFh with KEYOFF), we can still use this voice
-	LDRSH	r6, [r5, r6]
-	ADD	r6, #0x01
-	BNE	0f
-	LDRB	r6, [r5, #0x00]
+	LDRB	r6, [r5, #0x00]    @ If we JUST did a key-off earlier (ie. TicksRem == FFFFh with KEYOFF), we can still use this voice
 	LSL	r6, #0x20-5
-	BCS	.LReadNoteCommandLoop_NoteOn_LayerLoop_FindVoice_PortamentoEdgeCase
+	BCS	1f
 0:	LDRH	r6, [r5, #0x04]    @ Portamento.Duration = TicksRem
 	CMP	r6, #0xFF
 	BCC	0f
@@ -927,6 +923,10 @@ ASM_ALIGN(4)
 0:	MOV	r4, r5             @ <- We expect &Voice in r4
 	MOV	r5, r2             @    ... and we expected &Track in r5
 	B	.LReadNoteCommandLoop_NoteOn_LayerLoop_UseVoice_StoreNote
+1:	MOV	r6, #0x04          @ Ensure TicksRem == FFFFh before using the edge case handler
+	LDRSH	r6, [r5, r6]
+	ADD	r6, #0x01
+	BNE	.LReadNoteCommandLoop_NoteOn_LayerLoop_FindVoice_PortamentoRestart
 
 .LReadNoteCommandLoop_NoteOn_LayerLoop_FindVoice_PortamentoEdgeCase:
 	LDRB	r6, [r5, #0x00]    @ Clear KEYOFF and NOPLAYER
