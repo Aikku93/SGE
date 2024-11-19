@@ -360,8 +360,12 @@ ASM_FUNC_BEG   (SGE_Driver_Update, DRIVERUPDATE_SECTION;ASM_MODE_ARM)
 
 SGE_Driver_Update:
 	STMFD	sp!, {r4-fp,lr}
+#if (!defined(__NDS__) || __NDS__ != 9)
 	ADR	ip, 1f+1
 	BX	ip
+#else
+	BLX	1f
+#endif
 ASM_MODE_THUMB
 1:	LDR	r2, [r0, #0x00]           @ State -> r2
 	LDR	r5, [r0, #0x04]           @ MixBuf -> r5
@@ -520,8 +524,12 @@ ASM_MODE_ARM
 
 ASM_MODE_THUMB
 .LEarlyExit:
+#if (!defined(__NDS__) || __NDS__ != 9)
 	LDR	r0, =.LExit
 	BX	r0
+#else
+	BLX	.LExit
+#endif
 
 /************************************************/
 .pool
@@ -947,8 +955,12 @@ ASM_MODE_ARM
 	ADDS	r0, fp, r0, ror #0x10
 0:	ORRCS	r0, r0, #0x00FF<<16       @  Clip on overflow
 	ORRCS	r0, r0, #0xFF00<<16
+#if (!defined(__NDS__) || __NDS__ != 9)
 	ADR	lr, .LMixer_VoxLoop_UpdateLFO_Finish+1
 	BX	lr
+#else
+	BLX	.LMixer_VoxLoop_UpdateLFO_Finish
+#endif
 .LMixer_VoxLoop_UpdateLFO_UpdateOscillator_Delay:
 	MOV	r5, #0x00                 @ Force values for Phase=0
 	MOV	r7, #0x00
@@ -1431,7 +1443,6 @@ ASM_MODE_ARM
 #else
 	LDRH	r2, [r4, #0x08]
 #endif
-	LDR	ip, =.LMixer_VoxLoop_Tail+1
 	AND	lr, lr, #SGE_VOX_STAT_EG_MSK << SGE_VOX_STAT_EG1_SHIFT
 	CMP	lr, #SGE_VOX_STAT_EG_HLD << SGE_VOX_STAT_EG1_SHIFT
 	MOVHI	lr, #0x01<<(8 + 16-SGE_EG1_LOG2THRESHOLD)
@@ -1439,7 +1450,12 @@ ASM_MODE_ARM
 	STRCCB	lr, [r4, #0x00]            @  Y: Kill voice
 	STRCS	r3, [r4, #0x1C]            @  N: Store Vox.Data
 	STRCSH	r7, [r4, #0x18]            @     Store Vox.Phase
+#if (!defined(__NDS__) || __NDS__ != 9)
+	LDR	ip, =.LMixer_VoxLoop_Tail+1
 	BX	ip
+#else
+	BLX	.LMixer_VoxLoop_Tail
+#endif
 
 /************************************************/
 
@@ -1515,13 +1531,17 @@ ASM_MODE_ARM
 # endif
 #endif
 	LDMFD	sp!, {r4-r5}              @ Restore {Vox,nVoxRem}
-	LDR	ip, =.LMixer_VoxLoop_Tail+1
 #ifdef __GBA__
 	STRB	r0, [r4, #0x00]           @ Kill voice
 #else
 	STRB	r3, [r4, #0x00]
 #endif
+#if (!defined(__NDS__) || __NDS__ != 9)
+	LDR	ip, =.LMixer_VoxLoop_Tail+1
 	BX	ip
+#else
+	BLX	.LMixer_VoxLoop_Tail
+#endif
 
 @ r0: nSamplesRem
 @ Return r0=0, destroys r1
