@@ -26,7 +26,7 @@ ASM_MODE_ARM
 /************************************************/
 
 @ r0:  Fb
-@ r1: -(1.0-Lp)
+@ r1: (1.0-Lp)
 @ r2:  nTapLines | -nRem<<8 | (nTapLinesRem-1)<<24
 @ r3: &ReverbData
 @ r4: &DstL/&WetFbSrcR (s8[N])
@@ -48,8 +48,6 @@ ASM_MODE_ARM
 @  fp:  Line.zLp
 @  ip:  ClipMask(=7Fh)
 @  lr:  WetR
-@ NOTE: 1.0-Lp is negated on purpose. This results in the quantized signal
-@ eventually dying off to a stable value, instead of oscillating noise.
 
 @ Original equations:
 @  u[t] = x[t] - w*0.5u[t-N] | w=1 for left channel, w=-1 for right channel
@@ -68,11 +66,11 @@ ASM_MODE_ARM
 	LDMIA	r3!, {r9-fp}                       @ Line[i][Left].{Buf,Len|Idx,zLp} -> r9,sl,fp
 	SUBS	sl, sl, #0x01<<16                  @ --Line.Idx?
 # if (SGE_ALLPASS_BITS != 7)
-	RSB	\Wet, \Wet, fp                     @ Wet = zLp = zLp + (Wet-zLp)*(1.0-Lp) -> fp
+	SUB	\Wet, \Wet, fp                     @ Wet = zLp = zLp + (Wet-zLp)*(1.0-Lp) -> fp
 # else
-	SUB	\Wet, fp, \Wet, asr #0x01          @ <- As above, but pre-scale x[n] by 0.5
+	RSB	\Wet, fp, \Wet, asr #0x01          @ <- As above, but pre-scale x[n] by 0.5
 # endif
-	MUL	r8, \Wet, r1                       @ <- (1.0-Lp) is negated, so negate (Wet-zLp)
+	MUL	r8, \Wet, r1
 	ADDCC	sl, sl, sl, lsl #0x10              @  End: Wrap around (Line.Idx += Line.Len)
 	ADD	fp, fp, r8, asr #0x08
 # if (SGE_ALLPASS_BITS > 8)
@@ -159,8 +157,8 @@ ASM_MODE_ARM
 	MOV	lr, #0xFF
 	MOV	ip, #0x7F                          @ ClipMask -> ip
 	AND	r0, lr, r8, lsr #0x00              @ Fb -> r0
-	AND	r1, lr, r8, lsr #0x08              @ -(1.0-Lp) -> r1
-	SUB	r1, r1, #0x0100
+	AND	r1, lr, r8, lsr #0x08              @ (1.0-Lp) -> r1
+	RSB	r1, r1, #0x0100
 	AND	lr, lr, r8, lsr #0x10              @ nTapLines -> lr
 #if !SGE_USE_VOLSUBDIV
 	SUB	r2, lr, r7, lsl #0x08              @ nTapLines | -N<<8 -> r2
@@ -196,9 +194,9 @@ ASM_MODE_ARM
 	MOV	lr, lr, lsl #SGE_ALLPASS_BITS-8
 # endif
 #else
-	SUBS	r8, sl, r7, lsl #0x08              @ Apply lowpass filter
-	MULNE	r7, r8, r1                         @ NOTE: (Delay-zLp) needs negation for negated 1.0-Lp coefficient
-	SUBS	r8, fp, lr, lsl #0x08              @ NOTE: The filter works with 16bit input samples
+	RSBS	r8, sl, r7, lsl #0x08              @ Apply lowpass filter
+	MULNE	r7, r8, r1
+	RSBS	r8, fp, lr, lsl #0x08              @ NOTE: The filter works with 16bit input samples
 	MULNE	lr, r8, r1
 	ADD	sl, sl, r7, asr #0x08
 	ADD	fp, fp, lr, asr #0x08
