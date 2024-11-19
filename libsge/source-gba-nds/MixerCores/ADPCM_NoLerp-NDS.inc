@@ -29,11 +29,7 @@ ASM_MODE_ARM
 	ADR	r3, 0f
 	B	.LMixerCore_ADPCM_CommonInit
 0:	STRH	ip, 999f                 @ Store shifter
-#if (__NDS__ == 9)
-	MOVS	r7, r7, lsl #(31-15)     @ Shift Position to upper 16 bits [C=0]
-#else
 	MOVS	r7, r7, lsl #(32-15)
-#endif
 0:	MOVCS	lr, lr, lsl #0x04        @ Next nybble
 1:	SUBS	fp, fp, #0x01<<16        @ --nRem?
 	BCC	2f
@@ -43,7 +39,7 @@ ASM_MODE_ARM
 	SMLABB	r5, r1, r6, r5
 	SMLABT	r8, r1, r6, r8
 	STMIA	r9!, {r5,r8}
-	ADDS	r7, r7, sl, lsl #(31-15) @ Position += Rate?
+	ADDS	r7, r7, sl, lsl #(32-15) @ Position += Rate?
 	BPL	1b
 #else
 	MOV	r5, r6, lsr #0x10
@@ -57,9 +53,6 @@ ASM_MODE_ARM
 	BCC	1b
 #endif
 11:	ADPCM_DecodeSample lr            @ Decode next sample
-#if (__NDS__ == 9)
-	SUB	r7, r7, #0x01<<31        @ Clear overflow (Position<<16 must remain 0.15fxp)
-#endif
 	BICS	ip, lr, #0xFF000000      @ More samples in this frame? [C=1]
 	BNE	0b
 .LMixerCore_ADPCM_RateLT_NoLerp_ReadFrameOpcode:
@@ -69,11 +62,7 @@ ASM_MODE_ARM
 	STRCSH	ip, 999b
 	BCS	10b
 2:
-#if (__NDS__ == 9)
-	MOV	r7, r7, lsr #(31-15)     @ Restore Position|Phase
-#else
-	MOV	r7, r7, lsr #(32-15)
-#endif
+	MOV	r7, r7, lsr #(32-15)     @ Restore Position|Phase
 	ADDS	r0, r1, r0, asr #0x01    @ (YzM1-YzM2)+YzM2 = YzM1 -> r0
 	ANDMI	r0, r0, r0, lsr #0x10    @ [mask negative to 16bit]
 	ORR	r0, r0, r1, lsl #0x10    @ YzM1|YzM2<<16
