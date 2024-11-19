@@ -20,7 +20,7 @@ ASM_MODE_ARM
 /************************************************/
 
 @ r0:  Fb
-@ r1: -(1.0-Lp) (on ARM9, this is shifted up by 8 bits for SMLAWx)
+@ r1: (1.0-Lp) (on ARM9, this is shifted up by 8 bits for SMLAWx)
 @ r2:  nTapLines | -nRem<<8 | (nTapLinesRem-1)<<24
 @ r3: &ReverbData
 @ r4: &DstL/&WetFbSrcR (s16[N])
@@ -44,7 +44,7 @@ ASM_MODE_ARM
 @  lr:  WetR
 @ NOTE: Everything is pretty much the same as the GBA version.
 @ NOTE: With oversampling, we run out of registers and end up with:
-@  r0:  Fb | -(1.0-Lp)<<8
+@  r0:  Fb | (1.0-Lp)<<8
 @  r1: &Dst
 
 .macro ProcessFilterLine Wet, Chan
@@ -54,10 +54,10 @@ ASM_MODE_ARM
 	/************************************************/
 	LDMIA	r3!, {r9-fp}                       @ Line[i][Left].{Buf,Len|Idx,zLp} -> r9,sl,fp
 	SUBS	sl, sl, #0x01<<16                  @ --Line.Idx?
-	RSB	\Wet, \Wet, fp                     @ Wet = zLp = zLp + (Wet-zLp)*(1.0-Lp) -> fp
+	SUB	\Wet, \Wet, fp                     @ Wet = zLp = zLp + (Wet-zLp)*(1.0-Lp) -> fp
 # if (!defined(__NDS__) || __NDS__ != 9)
 #  if !SGE_USE_OVERSAMPLING
-	MUL	r8, \Wet, r1                       @ <- (1.0-Lp) is negated, so negate (Wet-zLp)
+	MUL	r8, \Wet, r1
 #  else
 	MOV	r8, r0, asr #0x08
 	MUL	r8, \Wet, r8
@@ -119,8 +119,8 @@ ASM_MODE_ARM
 	MOV	lr, #0xFF
 	ORR	ip, lr, lr, lsl #0x07              @ ClipMask -> ip
 	AND	r0, lr, r8, lsr #0x00              @ Fb -> r0
-	AND	r1, lr, r8, lsr #0x08              @ -(1.0-Lp) -> r1
-	SUB	r1, r1, #0x0100
+	AND	r1, lr, r8, lsr #0x08              @ (1.0-Lp) -> r1
+	RSB	r1, r1, #0x0100
 	AND	lr, lr, r8, lsr #0x10              @ nTapLines -> lr
 	SUB	r2, lr, r7, lsl #0x08              @ nTapLines | -N<<8 -> r2
 #ifdef SGE_PLATFORM_HAVE_FANCY_REVERB
@@ -154,29 +154,29 @@ ASM_MODE_ARM
 #ifdef SGE_PLATFORM_HAVE_FANCY_REVERB
 # if (ALLPASS_BITS < 16)
 	MOV	r7, r7, asr #0x10-ALLPASS_BITS
+	SUB	r7, r7, r7, asr #0x1F
 	MOV	lr, lr, asr #0x10-ALLPASS_BITS
-	ADD	r7, r7, #0x02                      @ <- Need bias to avoid infinite noise
-	ADD	lr, lr, #0x02
+	SUB	lr, lr, lr, asr #0x1F
 # endif
 #else
 # if (__NDS__ == 7)
 #  if !SGE_USE_OVERSAMPLING
-	SUBS	r8, sl, r7, asr #0x10-15           @ Apply lowpass filter
-	MULNE	r7, r8, r1                         @ NOTE: (Delay-zLp) needs negation for negated 1.0-Lp coefficient
-	SUBS	r8, fp, lr, asr #0x10-15           @ NOTE: The filter works with 15bit input samples for consistency
-	MULNE	lr, r8, r1                         @ with the ARM9 version of this loop
+	RSBS	r8, sl, r7, asr #0x10-ALLPASS_BITS @ Apply lowpass filter
+	MULNE	r7, r8, r1
+	RSBS	r8, fp, lr, asr #0x10-ALLPASS_BITS
+	MULNE	lr, r8, r1
 #  else
-	MOV	lr, r0, asr #0x08
-	SUBS	r8, sl, r7, asr #0x10-15
-	MULNE	r7, r8, lr
-	SUBS	r8, fp, lr, asr #0x10-15
-	MULNE	lr, r8, lr
+	MOV	r8, r0, asr #0x08
+	RSBS	r7, sl, r7, asr #0x10-ALLPASS_BITS
+	MULNE	r7, r7, r8
+	RSBS	lr, fp, lr, asr #0x10-ALLPASS_BITS
+	MULNE	lr, lr, r8
 #  endif
 	ADD	sl, sl, r7, asr #0x08
 	ADD	fp, fp, lr, asr #0x08
 # else
-	SUB	r7, sl, r7, asr #0x10-15
-	SUB	lr, fp, lr, asr #0x10-15
+	RSB	r7, sl, r7, asr #0x10-ALLPASS_BITS
+	RSB	lr, fp, lr, asr #0x10-ALLPASS_BITS
 #  if !SGE_USE_OVERSAMPLING
 	SMLAWB	sl, r1, r7, sl
 	SMLAWB	fp, r1, lr, fp
@@ -185,10 +185,8 @@ ASM_MODE_ARM
 	SMLAWB	fp, r0, lr, fp
 #  endif
 # endif
-	MOV	r7, sl, asr #0x0F-ALLPASS_BITS     @ Wet = Delay -> r7,lr
-	MOV	lr, fp, asr #0x0F-ALLPASS_BITS
-	ADD	r7, r7, #0x01                      @ <- Need bias to avoid infinite noise
-	ADD	lr, lr, #0x01
+	SUB	r7, sl, sl, asr #0x1F              @ Wet = Delay -> r7,lr (plus rounding to avoid infinite noise)
+	SUB	lr, fp, fp, asr #0x1F
 #endif
 	ADD	r2, r2, r2, lsl #0x18              @ nTapLines | -N<<8 | (nTapLinesRem-1)<<24 -> r2
 10:	ProcessFilterLine r7, 0
@@ -205,12 +203,10 @@ ASM_MODE_ARM
 	MUL	r9, lr, r9
 #endif
 	LDMIA	r6!, {r7,lr}                       @ DryL -> r7, DryR -> lr
-	ADD	r8, r7, r8, lsl #SGE_MIXER_VOLBITS + (16-ALLPASS_BITS-8)
-	ADD	r9, lr, r9, lsl #SGE_MIXER_VOLBITS + (16-ALLPASS_BITS-8)
-#if (SGE_MIXER_VOLBITS > 0)
-	MOV	r8, r8, asr #SGE_MIXER_VOLBITS
-	MOV	r9, r9, asr #SGE_MIXER_VOLBITS
-#endif
+	MOV	r8, r8, asr #(ALLPASS_BITS+8) - 16
+	MOV	r9, r9, asr #(ALLPASS_BITS+8) - 16
+	ADD	r8, r8, r7, asr #SGE_MIXER_VOLBITS
+	ADD	r9, r9, lr, asr #SGE_MIXER_VOLBITS
 #if SGE_USE_CLIPPING
 	FastClip r8, ip
 	FastClip r9, ip
