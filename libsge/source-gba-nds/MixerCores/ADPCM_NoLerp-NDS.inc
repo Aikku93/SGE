@@ -39,8 +39,6 @@ ASM_MODE_ARM
 	SMLABB	r5, r1, r6, r5
 	SMLABT	r8, r1, r6, r8
 	STMIA	r9!, {r5,r8}
-	ADDS	r7, r7, sl, lsl #(32-15) @ Position += Rate?
-	BPL	1b
 #else
 	MOV	r5, r6, lsr #0x10
 	BIC	r8, r6, r5, lsl #0x10
@@ -49,9 +47,9 @@ ASM_MODE_ARM
 	LDR	ip, [r9], #0x04
 	MLA	r8, r1, r8, ip
 	STMDB	r9, {r5,r8}
+#endif
 	ADDS	r7, r7, sl, lsl #(32-15) @ Position += Rate?
 	BCC	1b
-#endif
 11:	ADPCM_DecodeSample lr            @ Decode next sample
 	BICS	ip, lr, #0xFF000000      @ More samples in this frame? [C=1]
 	BNE	0b
@@ -61,8 +59,7 @@ ASM_MODE_ARM
 	ANDCS	ip, fp, lr, lsl #0x07    @  Update shifter
 	STRCSH	ip, 999b
 	BCS	10b
-2:
-	MOV	r7, r7, lsr #(32-15)     @ Restore Position|Phase
+2:	MOV	r7, r7, lsr #(32-15)     @ Restore Position|Phase
 	ADDS	r0, r1, r0, asr #0x01    @ (YzM1-YzM2)+YzM2 = YzM1 -> r0
 	ANDMI	r0, r0, r0, lsr #0x10    @ [mask negative to 16bit]
 	ORR	r0, r0, r1, lsl #0x10    @ YzM1|YzM2<<16
