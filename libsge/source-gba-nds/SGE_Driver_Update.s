@@ -780,36 +780,15 @@ ASM_MODE_THUMB
 
 .LMixer_VoxLoop_UpdateEG1_Done:
 .LMixer_VoxLoop_ApplyArticulationVolume:
-	MOV	r7, #0x05
-	LDRSB	r5, [r4, r7]              @ Art.PanToVol -> r5
-	SUB	r7, r3, #0x01             @ Unbias Pan to 00h..7Eh
-	MUL	r7, r2                    @ Pan*Vol -> r7 [.7 + 1.23 = 1.30fxp]
-	LSR	r7, #(30-23)              @ [Pan*Vol -> 1.23fxp]
-	MUL	r5, r7                    @ Pan*Vol*PanToVol -> r5 [1.23 + 1.7 = 1.30fxp]
 	LSR	r2, #(23-16)              @ [Vol -> 1.16fxp]
-	ASR	r7, r5, #0x06             @ Scale panning volume by 128/126 * 128/127 ~= (1 + 2^-6)(1 + 2^-7)(1 + 2^-12)(1 + 2^-14)
-	ADD	r5, r7
-	ASR	r7, r5, #0x07
-	ADD	r5, r7
-	ASR	r7, r5, #0x0C
-	ADD	r5, r7
-	ASR	r7, r5, #0x0E
-	ADD	r5, r7
-	ASR	r5, #(30-16)
-	BMI	0f
-	BEQ	0f
-	MOV	r2, #0x00                 @ For PanToVol > 0, use the panning volume directly
-0:	LDRB	r7, [r4, #0x04]           @ Art.PanWidth -> r7
-	ADC	r2, r5                    @ Vol *= (1.0 + Pan*PanToVol) -> Vol += Pan*Vol*PanToVol
-	LSR	r5, r6, #0x18             @ Vol *= Vox.Vel -> r5(1.16 + 1.7 = 1.23fxp]
+	LSR	r5, r6, #0x18             @ Vol *= Vox.Vel -> r5 (1.16 + 1.7 = 1.23fxp]
 	MUL	r5, r2
-	SUB	r3, #0x40                 @ Unbias Pan to -3Fh..+3Fh
-	MUL	r3, r7                    @ Pan *= PanWidth [.6 + .7 = .13fxp]
 	MOV	r7, #0x01
 	LDRSB	r7, [r4, r7]              @ Art.Pan -> r7
 	LDRB	r2, [r4, #0x00]           @ Art.Vol -> r2
-	ASR	r3, #(13-7)               @ Pan = (Pan -> .7fxp) + Art.Pan
-	ADD	r3, r7
+	SUB	r3, #0x40                 @ Unbias Pan to -3Fh..+3Fh, and scale to .7fxp
+	LSL	r3, #0x01
+	ADD	r3, r7                    @ Pan += Art.Pan
 	MUL	r2, r5                    @ Vol *= Art.Vol -> r2 [1.23 + 1.8 = 1.31fxp]
 	MOV	r4, sl                    @ Restore &Vox -> r4
 	ADD	r5, r2                    @ Fix Art.Vol bias -> r5
@@ -822,7 +801,7 @@ ASM_MODE_THUMB
 @ NOTE: EG2 maxes out at 65535/65536
 .LMixer_VoxLoop_UpdateEG2:
 	LDRH	r0, [r4, #0x0A]           @ EG2 -> r0
-	MOV	r5, #0x06                 @ offsetof(EG2ToKey) -> r5
+	MOV	r5, #0x0C                 @ offsetof(EG2ToKey) -> r5
 0:	LDR	r4, =.LMixer_VoxLoop_UpdateEG2_FuncTables
 	LSL	r7, r6, #0x18+2
 	BMI	.LMixer_VoxLoop_UpdateEG2_ProcessRelease
@@ -837,19 +816,15 @@ ASM_MODE_THUMB
 	LDR	r7, [r4, r7]              @ EGFunc -> ip
 .LMixer_VoxLoop_UpdateEG2_EnterProcess:
 	MOV	r4, r9                    @ Art -> r4
-	LDRSB	r5, [r4, r5]              @ EG2ToKey -> r5
+	LDRSH	r5, [r4, r5]              @ EG2ToKey -> r5
 	MOV	ip, r7
-	LDRB	r7, [r4, #0x07]           @ EG2ToPan -> r7
-	BEQ	.LMixer_VoxLoop_UpdateEG2_ProcessHold
+	BEQ	.LMixer_VoxLoop_UpdateEG2_ProcessHold_Continue
 
 .LMixer_VoxLoop_UpdateEG2_ProcessNormal:
 	MUL	r5, r0                    @ EG2ToKey *= EG2 (and shift to .8fxp)
-	ASR	r5, #0x10+4-8
-	MUL	r7, r0                    @ EG2ToPan *= EG2
-	ASR	r7, #0x10
+	ASR	r5, #0x10
 .LMixer_VoxLoop_UpdateEG2_ProcessHold_Continue:
 	ADD	r1, r5                    @ Key += EG2 * ScaledEG2ToKey
-	ADD	r3, r7                    @ Pan += EG2 * ScaledEG2ToPan
 	BX	ip
 
 .LMixer_VoxLoop_UpdateEG2_ProcessRelease:
@@ -860,10 +835,6 @@ ASM_MODE_THUMB
 /***********************/
 .pool
 /***********************/
-
-.LMixer_VoxLoop_UpdateEG2_ProcessHold:
-	LSL	r5, #(8-4)                @ EG2ToKey *= 1.0 (and shift to .8fxp)
-	B	.LMixer_VoxLoop_UpdateEG2_ProcessHold_Continue
 
 .LMixer_VoxLoop_UpdateEG2_Done:
 	MOV	r4, sl                    @ Restore &Vox
@@ -882,9 +853,9 @@ ASM_MODE_THUMB
 .LMixer_VoxLoop_UpdateLFO:
 	LDR	r0, [r4, #0x0C]           @ LFO | LFOFade<<16 -> r0
 #if !SGE_VARIABLE_SYNC_RATE
-	LDRB	r5, [r6, #0x0C]           @ LFORate -> r5
+	LDRB	r5, [r6, #0x05]           @ LFORate -> r5
 #endif
-	LDRB	r7, [r6, #0x0D]           @ LFORamp | LFODelay<<1 -> r7
+	LDRB	r7, [r6, #0x04]           @ LFORamp | LFODelay<<1 -> r7
 #if !SGE_VARIABLE_SYNC_RATE
 	ADD	r5, #0x01                 @ <- Rate is biased by 1
 #endif
@@ -895,7 +866,7 @@ ASM_MODE_THUMB
 	BL	.LMixer_VoxLoop_GetLinearStep_Core
 	MOV	r7, fp
 	MOV	fp, r5
-	LDRB	r5, [r6, #0x0C]           @ LFORate -> r5
+	LDRB	r5, [r6, #0x05]           @ LFORate -> r5
 	ADD	r5, #0x01
 #endif
 ASM_ALIGN(4)
@@ -970,16 +941,10 @@ ASM_MODE_ARM
 ASM_MODE_THUMB
 .LMixer_VoxLoop_UpdateLFO_Finish:
 	STR	r0, [r4, #0x0C]           @ Store LFO
-	MOV	r0, #0x08
+	MOV	r0, #0x06
 	LDRSH	r0, [r6, r0]              @ LFOToKey -> r0
-	PUSH	{r1}
 	MUL	r0, r7                    @ Key += Sin*LFOToKey [1.16 + 8.8 = 8.24fxp]
-	LDRB	r1, [r6, #0x0B]           @ LFOToPan -> r1
-	MUL	r1, r7
-	LDRB	r7, [r6, #0x0A]           @ LFOToVol -> r7
-	ASR	r1, #0x10
-	ADC	r3, r1                    @ Pan += Sin*LFOToPan
-	POP	{r1}
+	LDRB	r7, [r6, #0x08]           @ LFOToVol -> r7
 	ASR	r0, #(24-8)
 	ADC	r1, r0
 	MUL	r7, r5                    @ VolMod = LFOToVol*(1-Cos) -> r7 [.8 + 1.17 = .25fxp]

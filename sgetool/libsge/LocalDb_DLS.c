@@ -87,19 +87,14 @@ static void TranslateArticulation(
 		double InvWeight = w1 + w2; if(InvWeight != 0.0) InvWeight = 1.0 / InvWeight;
 		NewArt->LFOToKey = (int16_t)fmin(fmax(lrint((Art->LFO1ToPitch*w1 + Art->LFO2ToPitch*w2)*InvWeight * 256.0), (double)-0x7FFF), (double)+0x7FFF);
 		NewArt->LFOToVol = (uint8_t)fmin(fmax(lrint(Art->LFO1ToGain * 255.0), 0.0), 255.0);
-		NewArt->LFOToPan = 0;
 		NewArt->LFORate  = (uint8_t)fmin(fmax(lrint((Art->LFO1Freq*w1 + Art->LFO2Freq*w2)*InvWeight * 16.0), 0.0), 255.0);
 		NewArt->LFORamp  = 1;
 		NewArt->LFODelay = ConvertSecondsToTimeFormat((Art->LFO1Delay*w1 + Art->LFO2Delay*w2)*InvWeight, 9.9);
 	}
 
 	//! Set up everything else
-	//! FIXME: PanToVol+PanWidth with stereo linkage
 	NewArt->Pan      = (int8_t)lrint(Art->MasterPan * 126.0);
-	NewArt->PanWidth = (int8_t)fmin(fmax(lrint(fabs(Art->PanWidth) * 128.0), 0), 128.0);
-	NewArt->PanToVol = 0;
-	NewArt->EG2ToKey = (int8_t)fmin(fmax(lrint(Art->EG2ToPitch * 16.0), -128.0), +127.0);
-	NewArt->EG2ToPan = 0;
+	NewArt->EG2ToKey = (int16_t)fmin(fmax(lrint(Art->EG2ToPitch * 256.0), -32768.0), +32767.0);
 	NewArt->EG1.Attack  = ConvertSecondsToTimeFormat(Art->EG1.A, 40.0);
 	NewArt->EG1.Hold    = ConvertSecondsToTimeFormat(Art->EG1.H, 40.0);
 	NewArt->EG1.Decay   = ConvertSecondsToTimeFormat(Art->EG1.D, 40.0);
