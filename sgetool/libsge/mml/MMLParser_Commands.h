@@ -927,8 +927,19 @@ static int MML_Command_Label(struct MML_t *MML) {
 		return MML_ERROR;
 	}
 
-	//! Insert to labels list
+	//! Ensure we haven't defined the label inside a repeat section
+	uint8_t IsSubPattern = 0;
+	if(MML->State.NestLevel_Current > 0) {
+		uint32_t NestedLabelIdx = MML->State.NestedLabelIdxList[MML->State.NestLevel_Current-1];
+		if(MML->LabelsList[NestedLabelIdx].Type != MML_LABEL_TYPE_PATTERN) {
+			MML_AppendError(MML, "Labels can only be defined at the global scope or inside a pattern.", &LabelOffs);
+			return MML_ERROR;
+		} else IsSubPattern = 1;
+	}
+
+	//! Insert to labels list, and reset running state for sub-patterns
 	if(MML_CreateLabel(MML, LabelName, MML_LABEL_TYPE_GENERIC, &LabelOffs, &LabelOffs) == MML_ERROR) return MML_ERROR;
+	if(IsSubPattern) MML_ResetRunningState(MML);
 	return MML_OK;
 }
 
