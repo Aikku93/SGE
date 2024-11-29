@@ -18,8 +18,7 @@ SGE_FakeReverb_SetDecayTime:
 	LDRH	r2, [r0, #0x0C]   @ RateHz -> r2
 	LDRH	r0, [r0, #0x0E]   @ BufLen -> r0
 	LDR	ip, =2675169849
-	MUL	r2, r1, r2        @ RateHz * DecayTimeSecs -> r2,r3
-	MOV	r3, #0x00
+	UMULL	r2, r3, r1, r2    @ RateHz * DecayTimeSecs -> r2,r3
 	UMULL	r0, r1, ip, r0    @ 2^28 * Log2[-60dB]*BufLen -> r0,r1
 	ORRS	ip, r2, r3        @ Avoid divide by 0
 	MVNEQ	r0, #0x00
@@ -28,7 +27,8 @@ SGE_FakeReverb_SetDecayTime:
 	ORRNE	r1, r1, r0, lsr #0x20-7
 	MOVNE	r0, r0, lsl #0x07
 	BLNE	__aeabi_uldivmod
-	RSBS	r0, r0, #0x10<<27 @ DecayRate in .16fxp
+	ADDS	r0, r0, #0x00     @ [C=0]
+	RSCS	r0, r0, #0x10<<27 @ DecayRate in .16fxp
 	RSCS	r1, r1, #0x00     @ 2^(16-Log2[LogDecay]), but more like 2^(15.9999-x) to avoid needing to clip
 	MOVCC	r0, #0x00         @ <- Clip to 0 when Decay is < 1
 	BLCS	SGE_Exp2fxp
