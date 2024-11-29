@@ -29,6 +29,9 @@ SGE_Driver_Init:
 	BCC	.LExit_Error
 	LSR	r4, r2, #0x10
 	BNE	.LExit_Error
+#if (!defined(SGE_PLATFORM_HAVE_REVERB) && defined(SGE_PLATFORM_HAVE_FAKE_REVERB))
+	STR	r4, [r0, #0x14]             @ Clear reverb control
+#endif
 	LDR	r4, [sp, #0x0C]             @ MixBuf -> r4
 	CMP	r3, #0x02                   @ Invalid BufCnt?
 	BCC	.LExit_Error

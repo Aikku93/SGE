@@ -8,7 +8,8 @@
 //!  -SGE_PLATFORM_IS_64BIT
 //!  -SGE_PLATFORM_HAVE_FILEDB
 //!  -SGE_PLATFORM_HAVE_REVERB
-//!  -SGE_PLATFORM_HAVE_FANCY_REVERB
+//!  -SGE_PLATFORM_HAVE_FANCY_REVERB (requires SGE_PLATFORM_HAVE_REVERB)
+//!  -SGE_PLATFORM_HAVE_FAKE_REVERB (requires no SGE_PLATFORM_HAVE_REVERB)
 //! Platform-specific type definitions:
 //!  -SGE_MixSmp_t
 //!  -SGE_OutSmp_t
@@ -506,7 +507,15 @@ struct SGE_PTRALIGNED SGE_PACKED SGE_Driver_t {
 	uint16_t  RateHz; //! [0Ch] Sampling rate (in Hz)
 	uint16_t  BufLen; //! [0Eh] Length of each buffer (in samples)
 	struct SGE_Player_t     *PlayerList; //! [32bit: 10h | 64bit: 10h] Linked list of music players
+#ifdef SGE_PLATFORM_HAVE_REVERB
 	struct SGE_ReverbData_t *ReverbData; //! [32bit: 14h | 64bit: 18h] Reverb data structure
+#elif (defined(SGE_PLATFORM_HAVE_FAKE_REVERB))
+	uint16_t ReverbFb;                   //! [32bit: 14h | 64bit: 18h] Reverb feedback level
+	uint16_t ReverbDecay;                //! [32bit: 16h | 64bit: 1Ah] Reverb decay coefficient
+# ifdef SGE_PLATFORM_IS_64BIT
+	uint32_t ReverbPadding;
+# endif
+#endif
 #ifdef SGE_PLATFORM_IS_64BIT
 	SGE_MixSmp_t (*MixBuf)[0][2]; //! [20h] Assigned mixing buffer
 #endif
@@ -1108,6 +1117,27 @@ SGE_DECLSPEC void SGE_Reverb_AttachToDriver(
 
 /************************************************/
 #endif // SGE_PLATFORM_HAVE_REVERB
+#if (!defined(SGE_PLATFORM_HAVE_REVERB) && defined(SGE_PLATFORM_HAVE_FAKE_REVERB))
+/************************************************/
+
+//! SGE_FakeReverb_SetFeedbackLevel(Driver, Feedback_dBatten)
+//! Description: Set reverb feedback level for driver.
+//! Arguments:
+//!   Driver:           Driver work area.
+//!   Feedback_dBatten: Feedback attenuation level (as 8.8fxp decibels).
+//! Returns: Nothing; feedback level for reverb effect is set.
+void SGE_FakeReverb_SetFeedbackLevel(struct SGE_Driver_t *Driver, uint16_t Feedback_dBatten);
+
+//! SGE_FakeReverb_SetDecayTime(Driver, DecayTimeSecs)
+//! Description: Set decay time for reverb effect.
+//! Arguments:
+//!   Driver:        Driver work area.
+//!   DecayTimeSecs: Decay time (as .8fxp seconds from 0dB gain until -60dB gain).
+//! Returns: Nothing; decay time for reverb effect is set.
+void SGE_FakeReverb_SetDecayTime(struct SGE_Driver_t *Driver, uint16_t DecayTimeSecs);
+
+/************************************************/
+#endif // SGE_PLATFORM_HAVE_FAKE_REVERB
 /************************************************/
 #ifdef SGE_INTERNALS
 /************************************************/

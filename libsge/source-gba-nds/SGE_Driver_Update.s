@@ -1751,9 +1751,26 @@ ASM_MODE_THUMB
 	B	.LMixer_VoxLoop_UpdateEG1_Done
 */
 .LMixer_VoxLoop_UpdateEG1_Release:
+#if (!defined(SGE_PLATFORM_HAVE_REVERB) && defined(SGE_PLATFORM_HAVE_FAKE_REVERB))
+	LDR	r5, [sp, #0x10]           @ Driver -> r5
+	LDRH	r7, [r5, #0x14]           @ ReverbFb -> r7
+	LDRH	r5, [r5, #0x16]           @ ReverbDecay -> r5
+	CMP	r0, r7                    @ EG1 <= Fb? Use ReverbDecay
+	BLS	1f
+#endif
 	LDRB	r5, [r4, #0x0E+0*5+4]     @ EG1c -> r5
 	EG_GetExpDecStep
+#if (!defined(SGE_PLATFORM_HAVE_REVERB) && defined(SGE_PLATFORM_HAVE_FAKE_REVERB))
 	MUL	r5, r0
+	LDR	r7, [sp, #0x10]           @ Driver -> r7
+	LSR	r0, r5, #0x10
+	LDRH	r5, [r7, #0x14]           @ ReverbFb -> r5
+	CMP	r0, r5                    @ If EG1 fell below ReverbFb, clip to ReverbFb
+	BHI	0f
+	MOV	r0, r5
+0:	B	.LMixer_VoxLoop_UpdateEG1_Done
+#endif
+1:	MUL	r5, r0
 	LSR	r0, r5, #0x10
 	B	.LMixer_VoxLoop_UpdateEG1_Done
 
@@ -1816,12 +1833,20 @@ ASM_MODE_THUMB
 	B	.LMixer_VoxLoop_UpdateEG2_Done
 */
 .LMixer_VoxLoop_UpdateEG2_Release:
+#if (!defined(SGE_PLATFORM_HAVE_REVERB) && defined(SGE_PLATFORM_HAVE_FAKE_REVERB))
+	LDR	r5, [sp, #0x10]           @ Driver -> r5
+	LDR	r7, [sp, #0x00]           @ Vox -> r7
+	LDRH	r5, [r5, #0x14]           @ ReverbFb -> r5
+	LDRH	r7, [r7, #0x08]           @ EG1 -> r7
+	CMP	r7, r5                    @ EG1 <= ReverbFb: Stop release
+	BLS	1f
+#endif
 	LDRB	r5, [r4, #0x0E+1*5+4]     @ EG2c -> r5
 	EG_GetLinearStep
 	SUB	r0, r5                    @ EG2 -= EG2c
 	ASR	r5, r0, #0x1F             @ EG2 = MAX(0, EG2)
 	BIC	r0, r5
-	B	.LMixer_VoxLoop_UpdateEG2_Done
+1:	B	.LMixer_VoxLoop_UpdateEG2_Done
 
 /************************************************/
 .pool

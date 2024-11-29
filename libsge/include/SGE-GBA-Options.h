@@ -7,6 +7,7 @@
 //#define SGE_PLATFORM_HAVE_FILEDB //! <- This can be enabled, but there's not much point without a DLDI-like interface
 #define SGE_PLATFORM_HAVE_REVERB
 //#define SGE_PLATFORM_HAVE_FANCY_REVERB
+//#define SGE_PLATFORM_HAVE_FAKE_REVERB //! <- This only has an effect if SGE_PLATFORM_HAVE_REVERB is disabled
 
 //! Compilation options
 //! Notes:
