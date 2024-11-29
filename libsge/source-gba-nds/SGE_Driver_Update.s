@@ -1751,16 +1751,18 @@ ASM_MODE_THUMB
 	B	.LMixer_VoxLoop_UpdateEG1_Done
 */
 .LMixer_VoxLoop_UpdateEG1_Release:
-#if (!defined(SGE_PLATFORM_HAVE_REVERB) && defined(SGE_PLATFORM_HAVE_FAKE_REVERB))
-	LDR	r5, [sp, #0x10]           @ Driver -> r5
-	LDRH	r7, [r5, #0x14]           @ ReverbFb -> r7
-	LDRH	r5, [r5, #0x16]           @ ReverbDecay -> r5
-	CMP	r0, r7                    @ EG1 <= Fb? Use ReverbDecay
-	BLS	1f
-#endif
 	LDRB	r5, [r4, #0x0E+0*5+4]     @ EG1c -> r5
 	EG_GetExpDecStep
 #if (!defined(SGE_PLATFORM_HAVE_REVERB) && defined(SGE_PLATFORM_HAVE_FAKE_REVERB))
+	MOV	ip, r5                    @ EG1c -> ip
+	LDR	r7, [sp, #0x10]           @ Driver -> r5
+	LDRH	r5, [r7, #0x16]           @ ReverbDecay -> r5
+	LDRH	r7, [r7, #0x14]           @ ReverbFb -> r7
+	CMP	r5, ip                    @ If ReverbDecay is faster than EG1c, use EG1c to silence
+	BLS	2f
+	CMP	r0, r7                    @ EG1 <= Fb: Use ReverbDecay
+	BLS	3f
+1:	MOV	r5, ip                    @ EG1 > Fb: Use EG1c and clip to ReverbFb
 	MUL	r5, r0
 	LDR	r7, [sp, #0x10]           @ Driver -> r7
 	LSR	r0, r5, #0x10
@@ -1769,8 +1771,10 @@ ASM_MODE_THUMB
 	BHI	0f
 	MOV	r0, r5
 0:	B	.LMixer_VoxLoop_UpdateEG1_Done
+2:	MOV	r5, ip                    @ Restore EG1c -> r5 and apply to EG1
+3:
 #endif
-1:	MUL	r5, r0
+	MUL	r5, r0
 	LSR	r0, r5, #0x10
 	B	.LMixer_VoxLoop_UpdateEG1_Done
 
