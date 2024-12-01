@@ -1260,13 +1260,12 @@ ASM_MODE_ARM
 #if !SGE_USE_VOLSUBDIV
 	MOV	r0, r5                     @ MxCnt = MxRem -> r0
 #else
-	LDR	r3, [sp, #VOLSTEP_DIVCOUNT_SP_OFFS]
+	LDR	r0, [sp, #VOLSTEP_DIVCOUNT_SP_OFFS]
+	MOV	r3, r5, lsl #0x10          @ MxCnt = MIN(MxRem, SubdivCounter) -> r0
+	CMP	r0, r3, lsr #0x10
+	MOVHI	r0, r3, lsr #0x10
 #endif
 0:	ADD	r2, r8, #0x18              @ DataBeg -> r2
-#if SGE_USE_VOLSUBDIV
-	CMP	r0, r3                     @ MxCnt = MIN(MxRem, SubdivCounter) -> r0
-	MOVHI	r0, r3
-#endif
 #if SGE_SUPPORT_ADPCM
 	CMP	ip, #SGE_WAV_FRMT_ADPCM4   @ Frmt == ADPCM?
 	ADDEQ	r2, r2, lr, lsl #0x04      @  Skip ADPCM header[s]
