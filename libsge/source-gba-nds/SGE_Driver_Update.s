@@ -1260,15 +1260,13 @@ ASM_MODE_ARM
 #if !SGE_USE_VOLSUBDIV
 	MOV	r0, r5                     @ MxCnt = MxRem -> r0
 #else
-	LDR	r2, [sp, #VOLSTEP_DIVCOUNT_SP_OFFS]
-	MOV	r0, r5, lsr #0x10          @ MxCnt = MIN(MxRem, SubdivCounter, MxCntPerSubdiv) -> r0
-	CMP	r0, r2
-	MOVHI	r0, r2
-	MOV	r2, r5, lsl #0x10
-	CMP	r0, r2, lsr #0x10
-	MOVHI	r0, r2, lsr #0x10
+	LDR	r3, [sp, #VOLSTEP_DIVCOUNT_SP_OFFS]
 #endif
 0:	ADD	r2, r8, #0x18              @ DataBeg -> r2
+#if SGE_USE_VOLSUBDIV
+	CMP	r0, r3                     @ MxCnt = MIN(MxRem, SubdivCounter) -> r0
+	MOVHI	r0, r3
+#endif
 #if SGE_SUPPORT_ADPCM
 	CMP	ip, #SGE_WAV_FRMT_ADPCM4   @ Frmt == ADPCM?
 	ADDEQ	r2, r2, lr, lsl #0x04      @  Skip ADPCM header[s]
@@ -1480,16 +1478,13 @@ ASM_MODE_ARM
 # else
 1:	RSBS	r0, r0, r5, lsr #0x10     @ Clear remaining samples of this subdivision
 	BLNE	.LMixer_VoxLoop_MixLoop_ApplySilence
-	ADD	r2, sp, #VOLSTEP_DIVCOUNT_SP_OFFS
-	LDMIA	r2, {r2,r3,r6}
-	SUBS	r2, r2, r0
-	ADDLS	r2, r2, r5, lsr #0x10
-	STR	r2, [sp, #VOLSTEP_DIVCOUNT_SP_OFFS]
-	ADDLS	r6, r6, r3                @ Finished a subdivision - update volume
-	STRLS	r6, [sp, #VOLCOUNTER_SP_OFFS]
+	ADD	r2, sp, #VOLSTEP_SP_OFFS
+	LDMIA	r2, {r3,r6}
+	SUB	r5, r5, r5, lsr #0x10     @ MxCnt -= MxCntPerSubdiv?
+	ADD	r6, r6, r3                @ Finished a subdivision - update volume
+	STR	r6, [sp, #VOLCOUNTER_SP_OFFS]
 	BIC	r6, r6, #((1<<SGE_VOLSUBDIV_LOG2MAXSUBDIV)-1)<<16
 	MOV	r6, r6, lsr #SGE_VOLSUBDIV_LOG2MAXSUBDIV
-	SUB	r5, r5, r5, lsr #0x10     @ MxCnt -= MxCntPerSubdiv?
 	@MOV	r0, #0x00                 @ <- This gets set to 0 in ApplySilence
 	MOVS	r2, r5, lsl #0x10
 	BNE	1b
