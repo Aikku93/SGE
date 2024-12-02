@@ -67,6 +67,8 @@ SGE_Driver_UpdatePlayer:
 # else
 #  error "FIXME: BufLen*QUARTERNOTE_TICKS/12"
 # endif
+	LSR	r2, r1, #0x01       @ <- Apply rounding
+	ADD	r0, r2
 	BL	__aeabi_uidiv
 	MOV	r7, r0
 	PUSH	{r4-r7}
@@ -91,11 +93,7 @@ SGE_Driver_UpdatePlayer:
 	MVN	r0, r2
 	LSR	r0, #0x20-(10+SGE_BPM_FRACBITS)
 0:	SUB	r2, r3, r0          @ Phase -= StretchedTempo?
-#if (SGE_BPM_FRACBITS > 0)
-	BGT	.LProcessPlayer_End @  Not ready for next update
-#else
-	BGE	.LProcessPlayer_End @  <- Need to assume that we have a -1*2^-FRAC in there
-#endif
+	BGT	.LProcessPlayer_End @  <- On break-even (Phase == 0), process tick now
 
 @ r4: &Player
 @ r5: &Driver
@@ -241,11 +239,7 @@ SGE_Driver_UpdatePlayer:
 	MVN	r0, r3
 	LSR	r0, #0x20-(10+SGE_BPM_FRACBITS)
 0:	SUB	r2, r0              @ Phase -= StretchedTempo?
-#if (SGE_BPM_FRACBITS > 0)
-	BLE	.LProcessTick       @  Keep looping while Phase <= 0
-#else
-	BLT	.LProcessTick
-#endif
+	BLE	.LProcessTick       @  <- On break even (Phase == 0), continue
 
 .LProcessPlayer_End:
 	STRH	r2, [r4, #0x0E]     @ Store final Phase
