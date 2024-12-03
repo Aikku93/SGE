@@ -78,7 +78,7 @@ SGE_Driver_UpdatePlayer:
 0:	LDR	r6, [r4, #0x10]     @ Song -> r6?
 	LDRH	r0, [r4, #0x08+2]   @ Tempo -> r0
 	CMP	r6, #0x00
-#if SGE_VARIABLE_SYNC_RATE
+#if (SGE_VARIABLE_SYNC_RATE || SGE_BPM_FRACBITS > 0)
 	BEQ	.LExitLocalTrampoline
 #else
 	BEQ	.LExit
@@ -191,7 +191,7 @@ SGE_Driver_UpdatePlayer:
 	LDR	r0, [r1, r0]
 	BX	r0
 
-#if SGE_VARIABLE_SYNC_RATE
+#if (SGE_VARIABLE_SYNC_RATE || SGE_BPM_FRACBITS > 0)
 @ This is needed because otherwise the jump is out of range, oops...
 .LExitLocalTrampoline:
 	B	.LExit
@@ -239,7 +239,13 @@ SGE_Driver_UpdatePlayer:
 	MVN	r0, r3
 	LSR	r0, #0x20-(10+SGE_BPM_FRACBITS)
 0:	SUB	r2, r0              @ Phase -= StretchedTempo?
-	BLE	.LProcessTick       @  <- On break even (Phase == 0), continue
+#if (SGE_BPM_FRACBITS == 0)
+	BLT	.LProcessTick       @  <- On break even (Phase == 0), stop
+#else
+	MOV	r3, #0x01 << SGE_BPM_FRACBITS
+	CMN	r2, r3              @  <- Same as normal case, but need to check for
+	BLE	.LProcessTick       @     Phase <= -1.0 rather than just Phase < 0.
+#endif
 
 .LProcessPlayer_End:
 	STRH	r2, [r4, #0x0E]     @ Store final Phase
