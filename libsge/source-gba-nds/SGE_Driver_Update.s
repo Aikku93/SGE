@@ -194,8 +194,6 @@ ASM_FUNC_BEG(SGE_Driver_MixerCores, ASM_FUNCSECT_TEXT;ASM_MODE_ARM)
 #endif
 
 SGE_Driver_MixerCores:
-
-.LMixerCore_MixerLoops:
 #define STRINGIFY(x) #x
 #ifdef __GBA__
 # define MIXER_FILENAME(Format) STRINGIFY(MixerCores/##Format##.inc)
@@ -203,7 +201,8 @@ SGE_Driver_MixerCores:
 # define MIXER_FILENAME(Format) STRINGIFY(MixerCores/##Format-NDS##.inc)
 #endif
 
-#if SGE_SUPPORT_ADPCM
+//! ADPCM on NDS9 must go in ITCM
+#if (SGE_SUPPORT_ADPCM && !defined(__NDS__) || __NDS__ != 9)
 # ifdef __GBA__
 #  include "MixerCores/ADPCM_Common.inc"
 # else
@@ -211,7 +210,7 @@ SGE_Driver_MixerCores:
 # endif
 #  include MIXER_FILENAME(ADPCM_NoLerp)
 # if SGE_SUPPORT_LERP
-#   include MIXER_FILENAME(ADPCM_Lerp)
+#  include MIXER_FILENAME(ADPCM_Lerp)
 # endif
 #endif
 
@@ -253,16 +252,16 @@ SGE_Driver_MixerCores:
 # include MIXER_FILENAME(Mixdown_WithReverb)
 #endif
 
-# ifdef __GBA__
+#ifdef __GBA__
 
 .LMixerCore_Unsupported_Beg:
-#if 0
+# if 0
 	BL	.LMixer_VoxLoop_MixLoop_ApplySilence
 	B	.LMixer_VoxLoop_MixLoop_MixChunk_Tail
-#else
+# else
 	BL	.LMixer_VoxLoop_MixLoop_ApplySilence  - .LMixerCore_WorkArea + .LMixerCore_Unsupported_Beg
 	B	.LMixer_VoxLoop_MixLoop_MixChunk_Tail - .LMixerCore_WorkArea + .LMixerCore_Unsupported_Beg
-#endif
+# endif
 
 #endif
 
@@ -270,6 +269,25 @@ SGE_Driver_MixerCores:
 
 ASM_DATA_END(SGE_Driver_MixerCores)
 
+/************************************************/
+#if (SGE_SUPPORT_ADPCM && defined(__NDS__) && __NDS__ == 9)
+/************************************************/
+
+//! The ADPCM mixer requires self-modifying code
+
+ASM_FUNC_BEG(SGE_Driver_MixerCores_ITCM, ASM_FUNCSECT_ITCM;ASM_MODE_ARM)
+
+SGE_Driver_MixerCores_ITCM:
+#include "MixerCores/ADPCM_Common-NDS.inc"
+#include MIXER_FILENAME(ADPCM_NoLerp)
+#if SGE_SUPPORT_LERP
+# include MIXER_FILENAME(ADPCM_Lerp)
+#endif
+
+ASM_DATA_END(SGE_Driver_MixerCores_ITCM)
+
+/************************************************/
+#endif
 /************************************************/
 
 ASM_DATA_BEG(SGE_KeyScale, ASM_DATASECT_RODATA;ASM_ALIGN(4))
