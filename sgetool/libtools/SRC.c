@@ -140,42 +140,48 @@ static int ReadSamples(float *Dst, uint32_t N, FILE *SrcFile, const struct SRC_C
 //! Write samples into float buffer
 //! NOTE: Destroys Src buffer.
 static void ConvertFromFloat(void *DstBuf, const float *Src, uint32_t N, uint8_t Format, float DitherLevel, float NoiseShapeLevel) {
+	static uint32_t NoiseRNG_Seed = 0x12345678;
+
 	//! Dithering is applied in the range -0.5 ~ +0.5 at DitherLevel == 1.0
-	uint32_t NoiseRNG = 0x12345678;
-#define GET_DITHER_NOISE() ((float)(int32_t)NoiseRNG * 0x1.0p-32f * DitherLevel)
+	//! Because we average with the last noise output for a cheap lowpass,
+	//! the floating-point dither is scaled by a further factor of 1/2.
+	uint32_t NoiseRNG = NoiseRNG_Seed;
+	float OldDitherValue, DitherValue = 0.0f;
 #define UPDATE_DITHER() \
 	NoiseRNG ^= NoiseRNG << 13, \
 	NoiseRNG ^= NoiseRNG >> 17, \
-	NoiseRNG ^= NoiseRNG << 5;
+	NoiseRNG ^= NoiseRNG <<  5, \
+	OldDitherValue = DitherValue, DitherValue = (float)(int32_t)NoiseRNG * (0x1.0p-32f * 0.5f)
+#define GET_DITHER_NOISE() (DitherLevel * (DitherValue + OldDitherValue))
 	float QuantNoise = 0.0f;
 	switch(Format) {
 		case SRC_FORMAT_PCM8: {
 			uint8_t *Dst = (uint8_t*)DstBuf;
 			while(N--) {
+				UPDATE_DITHER();
 				float   x = (*Src++)*0x1.0p+7f + NoiseShapeLevel*QuantNoise;
 				int32_t y = (int32_t)lrintf(x + GET_DITHER_NOISE());
 				QuantNoise = (float)y - x;
-				UPDATE_DITHER();
 				*Dst++ = (uint8_t)(CLAMP(y, -0x80, +0x7F) + 0x80);
 			}
 		} break;
 		case SRC_FORMAT_PCM16: {
 			uint16_t *Dst = (uint16_t*)DstBuf;
 			while(N--) {
+				UPDATE_DITHER();
 				float   x = (*Src++)*0x1.0p+15f + NoiseShapeLevel*QuantNoise;
 				int32_t y = (int32_t)lrintf(x + GET_DITHER_NOISE());
 				QuantNoise = (float)y - x;
-				UPDATE_DITHER();
 				*Dst++ = (uint16_t)(CLAMP(y, -0x8000, +0x7FFF) + 0x8000) ^ 0x8000;
 			}
 		} break;
 		case SRC_FORMAT_PCM24: {
 			uint8_t *Dst = (uint8_t*)DstBuf;
 			while(N--) {
+				UPDATE_DITHER();
 				float   x = (*Src++)*0x1.0p+23f + NoiseShapeLevel*QuantNoise;
 				int32_t y = (int32_t)lrintf(x + GET_DITHER_NOISE());
 				QuantNoise = (float)y - x;
-				UPDATE_DITHER();
 				uint32_t z = (uint32_t)(CLAMP(y, -0x800000, +0x7FFFFF) + 0x800000) ^ 0x800000;
 				*Dst++ = (uint8_t)(z >> 0);
 				*Dst++ = (uint8_t)(z >> 8);
@@ -194,6 +200,7 @@ static void ConvertFromFloat(void *DstBuf, const float *Src, uint32_t N, uint8_t
 			//! Already done
 		} break;
 	}
+	NoiseRNG_Seed = NoiseRNG;
 #undef UPDATE_DITHER
 #undef GET_DITHER_NOISE
 }
