@@ -130,6 +130,12 @@ ASM_MODE_ARM
 	MOV	r8, lr, lsl #0x03+1
 #endif
 	STRB	r8, 3f
+#if (__NDS__ == 9)
+	ADR	r8, 3f
+	MCR	p15,0, r8, c7,c5,1                 @ IC_InvalidateRange(&Opcode)
+	MOV	r8, #0x00
+	MCR	p15,0, r8, c7,c10,4                @ WriteBufferDrain()
+#endif
 #if SGE_USE_OVERSAMPLING
 	STMFD	sp!, {r4,r5,r7}
 	ADD	r4, r4, #0x02
