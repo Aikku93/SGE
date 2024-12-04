@@ -23,7 +23,8 @@
 # if (__NDS__ == 7)
 #  define ASM_FUNCSECT_FAST ASM_FUNCSECT(.text, "ax", %progbits)
 # else
-#  define ASM_FUNCSECT_FAST ASM_FUNCSECT(.itcm, "awx", %progbits)
+#  define ASM_FUNCSECT_ITCM ASM_FUNCSECT(.itcm, "awx", %progbits)
+#  define ASM_FUNCSECT_FAST ASM_FUNCSECT_ITCM
 # endif
 #endif
 
@@ -49,6 +50,9 @@
 #define ASM_DATASECT_RODATA ASM_DATASECT(.rodata, "a",   %progbits)
 #define ASM_DATASECT_BSS    ASM_DATASECT(.bss,    "aw",  %nobits)
 #define ASM_DATASECT_SBSS   ASM_DATASECT(.sbss,   "aw",  %nobits)
+#if (defined(__NDS__) && __NDS__ == 9)
+# define ASM_DATASECT_DTCM  ASM_DATASECT(.dtcm,   "aw",  %progbits)
+#endif
 
 //! Data global macro
 #define ASM_DATA_GLOBAL(...) \
