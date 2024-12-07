@@ -1,9 +1,17 @@
 #------------------------------------------------#
+ifeq ($(TOOLSDIR),)
+	ifneq ($(DEVKITARM),)
+		TOOLSDIR := $(DEVKITARM)
+	else
+		$(error devKitARM not found, and TOOLSDIR not defined.)
+	endif
+endif
+#------------------------------------------------#
 ifeq ($(RELEASEDIR),)
 	$(error RELEASEDIR not defined)
 endif
 #------------------------------------------------#
-PATH := /x/Tools/GCCARM/bin:$(PATH)
+PATH := $(TOOLSDIR)/bin:$(PATH)
 #------------------------------------------------#
 
 SOURCES  := source-gba-nds
