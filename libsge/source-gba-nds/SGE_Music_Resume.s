@@ -26,7 +26,9 @@ ASM_FUNC_GLOBAL(SGE_Music_ResumeEx)
 ASM_FUNC_BEG   (SGE_Music_ResumeEx, ASM_FUNCSECT_TEXT;ASM_MODE_THUMB)
 
 SGE_Music_ResumeEx:
-	LDRH	r3, [r0, #0x02] @ Ensure track is paused
+	LDRH	r3, [r0, #0x02] @ Ensure track is paused and TempoStretch != 0
+	CMP	r2, #0x00
+	BEQ	.Lbxlr
 	CMP	r3, #0x00
 	BNE	.Lbxlr
 0:	MOV	r3, lr
