@@ -86,7 +86,7 @@ SGE_Driver_SongCommands:
 
 @ 8h: Octave
 .LSongCommand8h:
-	BL	.LFetchNybble   @ 0h..Ah: Set octave
+	FETCH_NYBBLE            @ 0h..Ah: Set octave
 	LSL	r2, r0, #0x02
 	LSL	r3, r0, #0x03
 	CMP	r0, #0x0B
@@ -98,7 +98,7 @@ SGE_Driver_SongCommands:
 1:	ADD	r2, r3
 	STRB	r2, [r4, #0x04]
 	B	.LTrackReadLoop
-2:	BL	.LFetchNybble
+2:	FETCH_NYBBLE
 	ADD	r2, #(3*12)
 	LSL	r3, r0, #0x20-4 @ Sign expand and multiply by 12
 	ASR	r3, #0x20-4-2
@@ -230,7 +230,7 @@ ASM_ALIGN(4)
 
 @ Fh,3h: Priority
 .LSongCommandFh3h:
-	BL	.LFetchNybble
+	FETCH_NYBBLE
 	STRB	r0, [r4, #0x03] @ Priority = ReadNybble()
 	B	.LTrackReadLoop
 
@@ -470,7 +470,7 @@ ASM_ALIGN(4)
 @ Eh,Xh: Extended command
 @ r1: &JumpTable
 .LSongCommandEh:
-	BL	.LFetchNybble
+	FETCH_NYBBLE
 	ADD	r0, #0x10
 	LSL	r0, #0x02
 	LDR	r0, [r1, r0]
@@ -481,7 +481,7 @@ ASM_ALIGN(4)
 @ Fh,Xh: Extended command
 @ r1: &JumpTable
 .LSongCommandFh:
-	BL	.LFetchNybble
+	FETCH_NYBBLE
 	ADD	r0, #0x20
 	LSL	r0, #0x02
 	LDR	r0, [r1, r0]
@@ -581,7 +581,7 @@ ASM_ALIGN(4)
 	MOV	fp, r1
 
 .LReadNoteCommandLoop:
-	BL	.LFetchNybble
+	FETCH_NYBBLE
 	CMP	r0, #0x0C
 	BCS	.LReadNoteCommand_ControlCode
 0:	LDRB	r3, [r4, #0x04]   @ Note += Octave
@@ -693,7 +693,7 @@ ASM_ALIGN(4)
 	B	.LReadNoteCommandLoop
 
 .LReadNoteCommand_ControlCode_FhXh:
-	BL	.LFetchNybble
+	FETCH_NYBBLE
 	SUB	r1, r0, #0x01      @ 0h: Velocity change
 	BCC	.LReadNoteCommand_ControlCode_Velocity
 	SUB	r0, #0x0B          @ 1h..Bh: Octave set
@@ -955,9 +955,9 @@ ASM_ALIGN(4)
 
 .LFetchByte:
 	PUSH	{lr}
-	BL	.LFetchNybble
+	FETCH_NYBBLE
 	LSL	r1, r0, #0x04
-	BL	.LFetchNybble
+	FETCH_NYBBLE
 	ORR	r0, r1
 	POP	{pc}
 
@@ -976,11 +976,11 @@ ASM_ALIGN(4)
 
 .LFetchMulti:
 	PUSH	{lr}
-	BL	.LFetchNybble
+	FETCH_NYBBLE
 	MOV	r1, r0
 	SUB	r3, #0x01
 	BLS	0f
-1:	BL	.LFetchNybble
+1:	FETCH_NYBBLE
 	LSL	r1, #0x04
 	ORR	r1, r0
 	SUB	r3, #0x01
@@ -1063,7 +1063,7 @@ ASM_ALIGN(4)
 	MOV	r2, #0x00                      @ nTicks = 0 -> r0
 
 .LFetchTimeCode_DecodeLoop:
-	BL	.LFetchNybble
+	FETCH_NYBBLE
 	CMP	r0, #0x0E                      @ Eh = Triplet
 	BHI	.LFetchTimeCode_Ticks          @ Fh = Tick-coded word
 	BEQ	.LFetchTimeCode_Triplet
@@ -1082,7 +1082,7 @@ ASM_ALIGN(4)
 	POP	{pc}
 
 .LFetchTimeCode_Triplet:
-	BL	.LFetchNybble
+	FETCH_NYBBLE
 	CMP	r0, #0x0E                      @ Eh,Eh..Fh = 1/128 (triplet)
 	BCS	2f
 1:	MOV	r3, #QUARTERNOTE_TICKS*4 * 2/3 @ Base = 1/1 triplet
@@ -1104,7 +1104,7 @@ ASM_ALIGN(4)
 
 .LProcessExternalCall:
 	PUSH	{lr}
-	BL	.LFetchNybble     @ PayloadSize -> r0?
+	FETCH_NYBBLE              @ PayloadSize -> r0?
 	MOV	r1, #0x00         @ Set default Payload = 0 -> r1
 	MOV	r3, r0            @ <- FetchMulti needs nNybbles in r3
 	BEQ	0f

@@ -7,6 +7,18 @@
 #define WHOLENOTE_TICKS 192 //! Ticks per whole note
 #define QUARTERNOTE_TICKS (WHOLENOTE_TICKS/4)
 
+/************************************************/
+
+.macro FETCH_NYBBLE
+#if (defined(__NDS__) && __NDS__ == 9)
+	BLX	.LFetchNybbleARM
+#else
+	BL	.LFetchNybble
+#endif
+.endm
+
+/************************************************/
+
 /*!
 
 The GBA formula is:
@@ -185,7 +197,7 @@ SGE_Driver_UpdatePlayer:
 0:	BL	.LGetToneFromProgram
 
 .LTrackReadLoop:
-	BL	.LFetchNybble       @ Call appropriate command handler
+	FETCH_NYBBLE                @ Call appropriate command handler
 	LDR	r1, =SGE_Driver_SongCommandJumpTable
 	LSL	r0, #0x02
 	LDR	r0, [r1, r0]
@@ -355,10 +367,11 @@ SGE_Driver_UpdatePlayer:
 @ Puts Nybble -> r0
 @ This call only impacts r0, but updates r6,r7
 
-ASM_ALIGN(4)
+#if (!defined(__NDS__) || __NDS__ != 9)
 .LFetchNybble:
 	BX	pc
-	NOP
+#endif
+
 ASM_MODE_ARM
 .LFetchNybbleARM:
 	AND	r0, r7, #0x0F         @ Data -> r0
