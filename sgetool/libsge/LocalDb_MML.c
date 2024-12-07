@@ -8,18 +8,25 @@
 #include "SGE-Compiler.h"
 #include "GlobalHelpers.h"
 /************************************************/
-#include <stdio.h>
 
 //! NotifyMIDIProgram MML callback
-static int NotifyMIDIProgramChangeFnc(void *Userdata, uint8_t Patch, uint8_t CC0, uint8_t CC32, uint8_t IsDrumKit) {
+static int NotifyMIDIProgramChangeFnc(
+	void *Userdata,
+	uint8_t Patch,
+	uint8_t CC0,
+	uint8_t CC32,
+	uint8_t IsDrumKit,
+	uint8_t UseGlobalToneBank
+) {
 #define MATCH_MIDI_PATCH(Tone) \
 	(Tone->Patch == Patch && Tone->CC0 == CC0 && Tone->CC32 == CC32 && Tone->DrumKit == IsDrumKit)
-	const struct SGE_LocalDb_t *Db = (struct SGE_LocalDb_t*)Userdata;
+	struct SGE_LocalDb_t *Db = (struct SGE_LocalDb_t*)Userdata;
 	struct SGE_LocalSong_t *Song = &Db->Songs[Db->nSongs-1];
 
 	//! First, try to re-use a tone
+	//! NOTE: Only try this if we aren't using the global tone bank
 	uint32_t ToneIdx, nTones = Song->nTones;
-	for(ToneIdx=0;ToneIdx<nTones;ToneIdx++) {
+	if(!UseGlobalToneBank) for(ToneIdx=0;ToneIdx<nTones;ToneIdx++) {
 		const struct SGE_LocalTone_t *Tone = &Song->Tones[ToneIdx];
 		if(MATCH_MIDI_PATCH(Tone)) {
 			return ToneIdx;
@@ -29,8 +36,24 @@ static int NotifyMIDIProgramChangeFnc(void *Userdata, uint8_t Patch, uint8_t CC0
 	//! Need to assign a new tone from database
 	nTones = Db->nTones;
 	for(ToneIdx=0;ToneIdx<nTones;ToneIdx++) {
-		const struct SGE_LocalTone_t *SrcTone = &Db->Tones[ToneIdx];
+		struct SGE_LocalTone_t *SrcTone = &Db->Tones[ToneIdx];
 		if(MATCH_MIDI_PATCH(SrcTone)) {
+			//! Using the global tone bank?
+			if(UseGlobalToneBank) {
+				//! If the tone isn't globally assigned yet, do so now
+				if(SrcTone->GlobalPatchIdx == 0xFFFF) {
+					//! Enlarge the tone remapping table
+					uint32_t nGlobalTones = Db->nGlobalTones;
+					uint32_t *NewToneRemapTable = realloc(Db->ToneRemapTable, (nGlobalTones+1)*sizeof(uint32_t));
+					if(!NewToneRemapTable) return -1;
+					Db->ToneRemapTable = NewToneRemapTable;
+					Db->nGlobalTones   = nGlobalTones+1;
+					NewToneRemapTable[nGlobalTones] = ToneIdx;
+					SrcTone->GlobalPatchIdx = nGlobalTones;
+				}
+				return SrcTone->GlobalPatchIdx;
+			}
+
 			//! Append this tone to the song tones list
 			nTones = Song->nTones;
 			struct SGE_LocalTone_t *NewTones = realloc(Song->Tones, (nTones+1)*sizeof(struct SGE_LocalTone_t));
@@ -64,12 +87,13 @@ static int NotifyMIDIProgramChangeFnc(void *Userdata, uint8_t Patch, uint8_t CC0
 					return -1;
 				}
 				memcpy(DstLayer->Regions, SrcLayer->Regions, SrcLayer->nReg*sizeof(struct SGE_LocalTone_Region_t));
-#if 0
-				//! Mark all waveforms as referenced.
+
+				//! Mark all regions as unreferenced, since we use the original
+				//! copy as the "global" bank, which can be marked as referenced
+				uint32_t RegionIdx;
 				for(RegionIdx=0;RegionIdx<SrcLayer->nReg;RegionIdx++) {
-					Db->Waves[DstLayer->Regions[RegionIdx].WaveIdx].dbLink.Referenced = 1;
+					DstLayer->Regions[RegionIdx].Referenced = 0;
 				}
-#endif
 			}
 			return nTones;
 		}
@@ -83,17 +107,17 @@ static int NotifyMIDIProgramChangeFnc(void *Userdata, uint8_t Patch, uint8_t CC0
 /************************************************/
 
 //! NotifyKeyOn MML callback
-static int NotifyKeyOnFnc(void *Userdata, uint8_t Program, uint8_t Key, uint8_t Vel) {
+static int NotifyKeyOnFnc(void *Userdata, uint8_t Program, uint8_t Key, uint8_t Vel, uint8_t UseGlobalToneBank) {
 	const struct SGE_LocalDb_t *Db = (struct SGE_LocalDb_t*)Userdata;
 	struct SGE_LocalSong_t *Song = &Db->Songs[Db->nSongs-1];
 
 	//! First, ensure the program is valid
-	if(Program >= Song->nTones) return -1;
+	if(!UseGlobalToneBank && Program >= Song->nTones) return -1;
 
 	//! Now mark all regions' waveforms as referenced on match
 	uint32_t nHits = 0;
 	uint32_t LayerIdx, RegionIdx;
-	const struct SGE_LocalTone_t *Tone = &Song->Tones[Program];
+	const struct SGE_LocalTone_t *Tone = !UseGlobalToneBank ? &Song->Tones[Program] : &Db->Tones[Db->ToneRemapTable[Program]];
 	for(LayerIdx=0;LayerIdx<Tone->nLayers;LayerIdx++) {
 		struct SGE_LocalTone_Layer_t *Layer = &Tone->Layers[LayerIdx];
 
@@ -118,7 +142,7 @@ static int NotifyKeyOnFnc(void *Userdata, uint8_t Program, uint8_t Key, uint8_t 
 /************************************************/
 
 //! Load MML song into local database
-int SGE_LocalDb_LoadMML(struct SGE_LocalDb_t *Db, FILE *SongFile, struct MML_t *MML) {
+int SGE_LocalDb_LoadMML(struct SGE_LocalDb_t *Db, FILE *SongFile, struct MML_t *MML, const struct SGE_gOptions_t *Options) {
 	uint32_t TrackIdx;
 
 	//! Add space for a new song
@@ -156,7 +180,8 @@ int SGE_LocalDb_LoadMML(struct SGE_LocalDb_t *Db, FILE *SongFile, struct MML_t *
 			FileSize,
 			NotifyMIDIProgramChangeFnc,
 			NotifyKeyOnFnc,
-			Db
+			Db,
+			Options->UseGlobalToneBank
 		) == MML_ERROR
 	) return SGE_LOCALDB_ERROR_INITMML;
 	if(MML_Parse(MML) == MML_ERROR) return SGE_LOCALDB_ERROR_MML;

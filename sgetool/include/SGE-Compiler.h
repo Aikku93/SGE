@@ -112,6 +112,7 @@ struct SGE_gOptions_t {
 	uint8_t  SRCRound;
 	uint8_t  SRCHalfOrder;
 	uint8_t  SRCWindow;
+	uint8_t  UseGlobalToneBank;
 	uint16_t WavMonoConvWindowSize;
 	uint16_t WavMonoConvWindowType;
 	uint16_t WavMonoConvHops;
@@ -162,7 +163,8 @@ struct SGE_LocalTone_t {
 	uint8_t  CC0;
 	uint8_t  CC32;
 	uint8_t  DrumKit;
-	uint32_t nLayers;
+	uint8_t  nLayers;
+	uint16_t GlobalPatchIdx; //! FFFFh = Unreferenced in global tone bank
 	struct SGE_LocalTone_Layer_t *Layers;
 };
 
@@ -189,10 +191,12 @@ struct SGE_LocalDb_t {
 	uint32_t nWaves;
 	uint32_t nTones;
 	uint32_t nSongs;
+	uint32_t nGlobalTones;
 	struct SGE_LocalWav_t  *Waves;
 	struct SGE_LocalTone_t *Tones;
 	struct SGE_LocalSong_t *Songs;
 	uint16_t *WavRemapTable;
+	uint32_t *ToneRemapTable;
 };
 
 /************************************************/
@@ -256,7 +260,7 @@ const char *SGE_LocalDb_Export_ErrorCodeToString(int ErrorCode);
 
 //! Load MML song into local database
 struct MML_t;
-int SGE_LocalDb_LoadMML(struct SGE_LocalDb_t *Db, FILE *SongFile, struct MML_t *MML);
+int SGE_LocalDb_LoadMML(struct SGE_LocalDb_t *Db, FILE *SongFile, struct MML_t *MML, const struct SGE_gOptions_t *Options);
 
 /************************************************/
 

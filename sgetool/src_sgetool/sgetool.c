@@ -41,6 +41,15 @@ static const char *HelpString =
 	" Global Options\n"
 	" --------------\n"
 	" -o:SoundBank.sge   - Set output file.\n"
+	" -globaltones:n     - Use a unified global tone bank. This forces songs to use\n"
+	"                      a single tone bank (thus conserving storage). Note that\n"
+	"                      when a song uses the global tone bank, and is loaded from\n"
+	"                      file, there is no way to distinguish which waveforms are\n"
+	"                      actually used by that song, and the entire global bank's\n"
+	"                      waveforms are loaded.\n"
+	"                      This option is mostly useful when not using file loading\n"
+	"                      (such as on GBA), and can be overriden per-song using the\n"
+	"                      `$globaltones = true/false` global option in MML.\n"
 	" Waveform Options\n"
 	" ----------------\n"
 	" -wavgain:0.0dB     - Set the global waveform gain. This will modify the sample\n"
@@ -229,15 +238,35 @@ static int Option_SetOutputFile(
 	return 1;
 }
 
+static int Option_UseGlobalTones(
+	const char *OptArg,
+	void *Userdata,
+	struct SGE_gOptions_t *Options,
+	SGE_ParseOptions_ErrorLogger_t ErrorLogger,
+	void *ErrorLogger_Userdata
+) {
+	(void)Userdata;
+	if((OptArg[0] == 'y' || OptArg[0] == 'Y') && OptArg[1] == '\0') {
+		Options->UseGlobalToneBank = 1;
+	} else if((OptArg[0] == 'n' || OptArg[0] == 'N') && OptArg[1] == '\0') {
+		Options->UseGlobalToneBank = 0;
+	} else {
+		if(ErrorLogger) ErrorLogger(ErrorLogger_Userdata, "ERROR: Expected `y` or `n` for global tones bank option. (-globaltones:%s).\n", OptArg);
+		return -1;
+	}
+	return 1;
+}
+
 static struct SGE_ParseOptions_ExtraOpt_t ProgramOptionsExtra[] = {
 	{"-o:", Option_SetOutputFile},
+	{"-globaltones:", Option_UseGlobalTones},
 	{NULL},
 };
 
 /************************************************/
 
 //! Parse song file (MIDI or MML)
-static int ParseSongFile(FILE *File, const char *Filename, struct SGE_LocalDb_t *LocalDb) {
+static int ParseSongFile(FILE *File, const char *Filename, struct SGE_LocalDb_t *LocalDb, const struct SGE_gOptions_t *Options) {
 	//! Check for MIDI
 	uint32_t MThd = 0, Size = 0; {
 		fread(&MThd, sizeof(MThd), 1, File);
@@ -252,7 +281,7 @@ static int ParseSongFile(FILE *File, const char *Filename, struct SGE_LocalDb_t 
 		//! Assume MML file
 		struct MML_t MML;
 		printf("Parsing MML song (%s)... ", Filename);
-		int ErrorCode = SGE_LocalDb_LoadMML(LocalDb, File, &MML);
+		int ErrorCode = SGE_LocalDb_LoadMML(LocalDb, File, &MML, Options);
 		if(ErrorCode != SGE_LOCALDB_ERROR_NONE) {
 			//! MML error?
 			if(ErrorCode == SGE_LOCALDB_ERROR_MML) {
@@ -310,6 +339,7 @@ int main(int argc, const char *argv[]) {
 	Options.SRCRound              = SGE_OPT_SRCROUND_MIDDLE;
 	Options.SRCHalfOrder          = (33-1) / 2;
 	Options.SRCWindow             = SGE_OPT_SRCWINDOW_HANN;
+	Options.UseGlobalToneBank     = 0;
 	Options.WavMonoConvWindowSize = 256;
 	Options.WavMonoConvWindowType = SGE_OPT_MONOCONV_WINDOW_HANN;
 	Options.WavMonoConvHops       = 8;
@@ -453,7 +483,7 @@ int main(int argc, const char *argv[]) {
 					fclose(SongFile);
 					goto Error_ReadSongFile;
 				}
-				int Result = ParseSongFile(File, FilenameBeg, &LocalDb);
+				int Result = ParseSongFile(File, FilenameBeg, &LocalDb, &Options);
 				fclose(File);
 				if(!Result) {
 					fclose(SongFile);
@@ -461,7 +491,7 @@ int main(int argc, const char *argv[]) {
 				}
 			}
 			puts("--- End of songs list file ---");
-		} else if(!ParseSongFile(SongFile, Filename, &LocalDb)) {
+		} else if(!ParseSongFile(SongFile, Filename, &LocalDb, &Options)) {
 			fclose(SongFile);
 			goto Error_ReadSongFile;
 		}

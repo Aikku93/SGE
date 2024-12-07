@@ -14,8 +14,9 @@ SGE_FileDb_UnloadSong:
 	CMP	r0, #0x00
 	BEQ	.LExit_Fail
 0:	LDR	r3, [r0, #0x08] @ Song.Db -> r3
-	LSR	r3, #0x01       @ Check dbLink.isRaw
+	LSR	r2, r3, #0x01   @ Check dbLink.isRaw
 	BCS	.LExit_Fail
+	MOV	ip, r3
 
 .LUnloadTones:
 	MOV	r3, lr
@@ -26,7 +27,14 @@ SGE_FileDb_UnloadSong:
 	ADD	r1, #0x10
 	LSL	r3, #0x02       @ Song.Tones[] -> r1
 	ADD	r1, r3
-0:	CMP	r2, #0x00
+0:	CMP	r2, #0x00       @ Using local tone bank?
+	BNE	.LUnloadTones_Loop
+
+.LUnloadTones_UseGlobalBank:
+	MOV	r1, ip
+	LDRB	r2, [r1, #0x10] @ nTones = GlobalBank.nTones -> r2?
+	ADD	r1, #0x10+0x04  @ &GlobalBank.Tones[] -> r1
+	CMP	r2, #0x00
 	BEQ	.LUnloadTones_Done
 
 .LUnloadTones_Loop:

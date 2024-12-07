@@ -125,6 +125,9 @@ static int AppendWaveform(struct SGE_LocalDb_t *Db, const struct SGE_LocalWav_t 
 
 //! Append instrument to database
 static int AppendInstrument(struct SGE_LocalDb_t *Db, const struct DLS_Instrument_t *Instrument) {
+	//! Sanity-check the layer count
+	if(Instrument->nLayers > 255) return 0;
+
 	//! First, enlarge the array
 	uint32_t nTones = Db->nTones;
 	struct SGE_LocalTone_t *NewTonesTbl = realloc(Db->Tones, (nTones+1)*sizeof(struct SGE_LocalTone_t));
@@ -139,6 +142,7 @@ static int AppendInstrument(struct SGE_LocalDb_t *Db, const struct DLS_Instrumen
 	NewTone->CC32    = Instrument->CC32;
 	NewTone->DrumKit = Instrument->DrumKit;
 	NewTone->nLayers = Instrument->nLayers;
+	NewTone->GlobalPatchIdx = 0xFFFF;
 	NewTone->Layers  = (struct SGE_LocalTone_Layer_t*)malloc(Instrument->nLayers * sizeof(struct SGE_LocalTone_Layer_t));
 	if(!NewTone->Layers) {
 		NewTone->nLayers = 0; //! <- Compatibility with LocalDb_Destroy()
@@ -193,6 +197,9 @@ int SGE_LocalDb_SoundBankFromDLS(struct SGE_LocalDb_t *Db, FILE *DLSFile, const 
 
 	//! Check waveform count
 	if(DLS.nWaveforms > 65535) return DLS_ERROR_UNSUPPORTED;
+
+	//! Reset global tones count
+	Db->nGlobalTones = 0;
 
 	//! Add all waveforms
 	uint32_t WaveIdx;

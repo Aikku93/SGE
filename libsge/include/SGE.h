@@ -256,6 +256,7 @@ struct SGE_ALIGNED SGE_PACKED SGE_Tone_t {
 //!   offset of this structure. There will be exactly nTrack items in the list.
 //!  -The tone structures for this song are located immediately after the last
 //!   TrkOffs item.
+//!   If nTone == 0, then this song uses the databases's global tone bank.
 //!  -Generally, the track data should be placed immediately after all the tone
 //!   data. However, it is possible to place data in between the tones and the
 //!   track data, provided that the track offsets are still valid.
@@ -273,6 +274,13 @@ struct SGE_ALIGNED SGE_PACKED SGE_Song_t {
 //! Memory-mapped database structure [10h bytes]
 //! This corresponds to directly reading the database file from memory, with
 //! the assumption that the memory is read-only and cannot be relocated.
+//! If any song uses a global/shared tone bank, this data comes immediately
+//! after this header.
+struct SGE_ALIGNED SGE_PACKED SGE_GlobalToneBank_t {
+	uint8_t nTones;             //! [00h] Tone count in bank
+	uint8_t r1[3];
+	struct SGE_Tone_t Tones[0]; //! [04h] Start of tones
+};
 struct SGE_ALIGNED SGE_PACKED SGE_Db_t {
 	uint32_t Magic;       //! [00h] Signature
 	uint16_t nWave;       //! [04h] Number of waveforms in database

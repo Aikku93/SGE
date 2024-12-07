@@ -28,14 +28,16 @@ int MML_Init(
 	uint32_t DataSize,
 	MML_NotifyMIDIProgramChangeFnc_t NotifyMIDIProgramChange,
 	MML_NotifyKeyOnFnc_t             NotifyKeyOn,
-	void                            *NotifyUserdata
+	void                            *NotifyUserdata,
+	uint8_t UseGlobalToneBank
 ) {
 	//! Initialize struct
 	MML->ErrorDepth = 0;
 	MML->NotifyUserdata          = NotifyUserdata;
 	MML->NotifyMIDIProgramChange = NotifyMIDIProgramChange;
 	MML->NotifyKeyOn             = NotifyKeyOn;
-	MML->TicksPerBeat = MML_TICKS_PER_QUARTER_NOTE;
+	MML->UseGlobalToneBank = UseGlobalToneBank;
+	MML->TicksPerBeat      = MML_TICKS_PER_QUARTER_NOTE;
 	MML->Input.Data  = Data;
 	MML->Input.Size  = DataSize;
 	MML->Input.Offs.DataOffs = 0;

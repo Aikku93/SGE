@@ -25,6 +25,7 @@ static int MML_ParseCommand(struct MML_t *MML) {
 		MML_ConsumeChars(MML, 1, 0);
 		if(MML_StringMatchAndConsume(MML, "tpq",          1)) return MML_Command_Global_TicksPerBeat(MML);
 		if(MML_StringMatchAndConsume(MML, "ticksperbeat", 1)) return MML_Command_Global_TicksPerBeat(MML);
+		if(MML_StringMatchAndConsume(MML, "globaltones",  1)) return MML_Command_Global_UseGlobalTones(MML);
 		MML_AppendErrorCurrentOffset(MML, "Expected global command following '$' symbol.");
 		return MML_ERROR;
 	}

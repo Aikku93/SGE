@@ -135,6 +135,120 @@ static void SortWaveforms(const struct SGE_LocalDb_t *Db, uint16_t *WavRemapTabl
 
 /************************************************/
 
+//! Write tone to file
+static int WriteTone(FILE *SGEFile, const struct SGE_LocalDb_t *Db, const struct SGE_LocalTone_t *Tone) {
+	uint32_t LayerIdx, RegionIdx, ArtIdx;
+
+	//! Skip over header for now, and begin writing layers
+	struct SGE_Tone_t ToneHeader;
+	ToneHeader.Size   = sizeof(ToneHeader);
+	ToneHeader.nLayer = 0;
+	uint32_t FileOffs_ToneHeader = ftell(SGEFile);
+	fseek(SGEFile, sizeof(ToneHeader), SEEK_CUR);
+	for(LayerIdx=0;LayerIdx<Tone->nLayers;LayerIdx++) {
+		const struct SGE_LocalTone_Layer_t *Layer = &Tone->Layers[LayerIdx];
+
+		//! Again, skip over the header and begin writing regions
+		struct SGE_ToneLayer_t LayerHeader;
+		LayerHeader.VelLo = Layer->VelLo;
+		LayerHeader.VelHi = Layer->VelHi;
+		LayerHeader.nReg  = 0;
+		LayerHeader.nArt  = 0;
+		uint32_t FileOffs_LayerHeader = ftell(SGEFile);
+		fseek(SGEFile, sizeof(LayerHeader), SEEK_CUR);
+		struct SGE_WavArt_t *Articulations = NULL;
+		for(RegionIdx=0;RegionIdx<Layer->nReg;RegionIdx++) {
+			struct SGE_LocalTone_Region_t *Region = &Layer->Regions[RegionIdx];
+			if(!Region->Referenced) continue;
+
+			struct SGE_ToneRegion_t RegionData;
+			RegionData.KeyLo  = Region->KeyLo;
+			RegionData.KeyHi  = Region->KeyHi;
+			RegionData.Wave   = Db->Waves[Region->WaveIdx].Header.dbIdx;
+
+			//! Check for a match in the articulations
+			for(ArtIdx=0;ArtIdx<LayerHeader.nArt;ArtIdx++) {
+				if(!memcmp(&Region->Art, &Articulations[ArtIdx], sizeof(struct SGE_WavArt_t))) {
+					break;
+				}
+			}
+			RegionData.ArtIdx = ArtIdx;
+
+			//! If we need to create a new articulation, do so now
+			if(ArtIdx >= LayerHeader.nArt) {
+				uint32_t nArt = LayerHeader.nArt;
+				struct SGE_WavArt_t *NewArt = realloc(Articulations, (nArt+1)*sizeof(struct SGE_WavArt_t));
+				if(!NewArt) {
+					free(Articulations);
+					return SGE_LOCALDB_ERROR_OUT_OF_MEMORY;
+				}
+				Articulations = NewArt;
+				LayerHeader.nArt = nArt+1;
+				memcpy(&Articulations[nArt], &Region->Art, sizeof(struct SGE_WavArt_t));
+			}
+
+			//! Write region
+			if(!fwrite(&RegionData, sizeof(RegionData), 1, SGEFile)) {
+				free(Articulations);
+				return SGE_LOCALDB_ERROR_IO;
+			}
+			LayerHeader.nReg++;
+		}
+
+		//! If this layer has no regions, skip it
+		if(LayerHeader.nReg == 0) {
+			//! Need to rewind because we skipped the [non-existent] header
+			fseek(SGEFile, FileOffs_LayerHeader, SEEK_SET);
+			continue;
+		}
+
+		//! Write the articulations
+		if(!fwrite(Articulations, LayerHeader.nArt*sizeof(struct SGE_WavArt_t), 1, SGEFile)) {
+			free(Articulations);
+			return SGE_LOCALDB_ERROR_IO;
+		}
+		free(Articulations);
+
+		//! Write the layer header
+		uint32_t FileOffs_ToneEnd = ftell(SGEFile);
+		fseek(SGEFile, FileOffs_LayerHeader, SEEK_SET);
+		if(!fwrite(&LayerHeader, sizeof(LayerHeader), 1, SGEFile)) return SGE_LOCALDB_ERROR_IO;
+		fseek(SGEFile, FileOffs_ToneEnd, SEEK_SET);
+		ToneHeader.nLayer++;
+
+		//! Increase tone size
+		ToneHeader.Size += sizeof(LayerHeader);
+		ToneHeader.Size += LayerHeader.nReg*sizeof(struct SGE_ToneRegion_t);
+		ToneHeader.Size += LayerHeader.nArt*sizeof(struct SGE_WavArt_t);
+	}
+
+	//! Write the tone header
+	uint32_t FileOffs_ToneEnd = ftell(SGEFile);
+	fseek(SGEFile, FileOffs_ToneHeader, SEEK_SET);
+	if(!fwrite(&ToneHeader, sizeof(ToneHeader), 1, SGEFile)) return SGE_LOCALDB_ERROR_IO;
+	fseek(SGEFile, FileOffs_ToneEnd, SEEK_SET);
+	return SGE_LOCALDB_ERROR_NONE;
+}
+
+//! Write global tone bank to file
+static int WriteGlobalToneBank(FILE *SGEFile, const struct SGE_LocalDb_t *Db) {
+	//! Write the header
+	struct SGE_GlobalToneBank_t Header;
+	Header.nTones = Db->nGlobalTones;
+	if(!fwrite(&Header, sizeof(Header), 1, SGEFile)) return SGE_LOCALDB_ERROR_IO;
+
+	//! Write the tone structures
+	uint32_t ToneIdx;
+	for(ToneIdx=0;ToneIdx<Db->nGlobalTones;ToneIdx++) {
+		const struct SGE_LocalTone_t *Tone = &Db->Tones[Db->ToneRemapTable[ToneIdx]];
+		int Result = WriteTone(SGEFile, Db, Tone);
+		if(Result != SGE_LOCALDB_ERROR_NONE) return Result;
+	}
+	return SGE_LOCALDB_ERROR_NONE;
+}
+
+/************************************************/
+
 //! Export local database to final file
 int SGE_LocalDb_Export(struct SGE_LocalDb_t *Db, FILE *SGEFile, FILE *WavFile, const struct SGE_gOptions_t *Options) {
 	uint32_t FileBeginOffs = ftell(SGEFile);
@@ -157,6 +271,16 @@ int SGE_LocalDb_Export(struct SGE_LocalDb_t *Db, FILE *SGEFile, FILE *WavFile, c
 	DbHeader.nWave = 0;
 	DbHeader.nSong = 0;
 	fseek(SGEFile, sizeof(DbHeader), SEEK_CUR);
+
+	//! Skip over the global tones bank if needed.
+	//! This is a truly awful hack. We are writing the whole global
+	//! tonebank out, because we don't know the size at this point,
+	//! and we then write it again later once we know the indices...
+	uint32_t FileOffs_GlobalToneBank = ftell(SGEFile);
+	if(Db->nGlobalTones) {
+		int Result = WriteGlobalToneBank(SGEFile, Db);
+		if(Result != SGE_LOCALDB_ERROR_NONE) return Result;
+	}
 
 	//! Align start of data
 	if(AlignFile(SGEFile) == EOF) return SGE_LOCALDB_ERROR_IO;
@@ -463,96 +587,11 @@ int SGE_LocalDb_Export(struct SGE_LocalDb_t *Db, FILE *SGEFile, FILE *WavFile, c
 		fseek(SGEFile, Song->nTracks*sizeof(uint32_t), SEEK_CUR);
 
 		//! Begin writing tones
-		uint32_t ToneIdx, LayerIdx, RegionIdx, ArtIdx;
+		uint32_t ToneIdx;
 		for(ToneIdx=0;ToneIdx<Song->nTones;ToneIdx++) {
 			const struct SGE_LocalTone_t *Tone = &Song->Tones[ToneIdx];
-
-			//! Skip over header for now, and begin writing layers
-			struct SGE_Tone_t ToneHeader;
-			ToneHeader.Size   = sizeof(ToneHeader);
-			ToneHeader.nLayer = 0;
-			uint32_t FileOffs_ToneHeader = ftell(SGEFile);
-			fseek(SGEFile, sizeof(ToneHeader), SEEK_CUR);
-			for(LayerIdx=0;LayerIdx<Tone->nLayers;LayerIdx++) {
-				const struct SGE_LocalTone_Layer_t *Layer = &Tone->Layers[LayerIdx];
-
-				//! Again, skip over the header and begin writing regions
-				struct SGE_ToneLayer_t LayerHeader;
-				LayerHeader.VelLo = Layer->VelLo;
-				LayerHeader.VelHi = Layer->VelHi;
-				LayerHeader.nReg  = 0;
-				LayerHeader.nArt  = 0;
-				uint32_t FileOffs_LayerHeader = ftell(SGEFile);
-				fseek(SGEFile, sizeof(LayerHeader), SEEK_CUR);
-				struct SGE_WavArt_t *Articulations = NULL;
-				for(RegionIdx=0;RegionIdx<Layer->nReg;RegionIdx++) {
-					struct SGE_LocalTone_Region_t *Region = &Layer->Regions[RegionIdx];
-					if(!Region->Referenced) continue;
-
-					struct SGE_ToneRegion_t RegionData;
-					RegionData.KeyLo  = Region->KeyLo;
-					RegionData.KeyHi  = Region->KeyHi;
-					RegionData.Wave   = Db->Waves[Region->WaveIdx].Header.dbIdx;
-
-					//! Check for a match in the articulations
-					for(ArtIdx=0;ArtIdx<LayerHeader.nArt;ArtIdx++) {
-						if(!memcmp(&Region->Art, &Articulations[ArtIdx], sizeof(struct SGE_WavArt_t))) {
-							break;
-						}
-					}
-					RegionData.ArtIdx = ArtIdx;
-
-					//! If we need to create a new articulation, do so now
-					if(ArtIdx >= LayerHeader.nArt) {
-						uint32_t nArt = LayerHeader.nArt;
-						struct SGE_WavArt_t *NewArt = realloc(Articulations, (nArt+1)*sizeof(struct SGE_WavArt_t));
-						if(!NewArt) {
-							free(Articulations);
-							return SGE_LOCALDB_ERROR_OUT_OF_MEMORY;
-						}
-						Articulations = NewArt;
-						LayerHeader.nArt = nArt+1;
-						memcpy(&Articulations[nArt], &Region->Art, sizeof(struct SGE_WavArt_t));
-					}
-
-					//! Write region
-					if(!fwrite(&RegionData, sizeof(RegionData), 1, SGEFile)) {
-						free(Articulations);
-						return SGE_LOCALDB_ERROR_IO;
-					}
-					LayerHeader.nReg++;
-				}
-
-				//! If this layer has no regions, skip it
-				if(LayerHeader.nReg == 0) {
-					//! Need to rewind because we skipped the [non-existent] header
-					fseek(SGEFile, FileOffs_LayerHeader, SEEK_SET);
-					continue;
-				}
-
-				//! Write the articulations
-				if(!fwrite(Articulations, LayerHeader.nArt*sizeof(struct SGE_WavArt_t), 1, SGEFile)) {
-					free(Articulations);
-					return SGE_LOCALDB_ERROR_IO;
-				}
-				free(Articulations);
-
-				//! Write the layer header
-				fseek(SGEFile, FileOffs_LayerHeader, SEEK_SET);
-				if(!fwrite(&LayerHeader, sizeof(LayerHeader), 1, SGEFile)) return SGE_LOCALDB_ERROR_IO;
-				fseek(SGEFile, 0, SEEK_END);
-				ToneHeader.nLayer++;
-
-				//! Increase tone size
-				ToneHeader.Size += sizeof(LayerHeader);
-				ToneHeader.Size += LayerHeader.nReg*sizeof(struct SGE_ToneRegion_t);
-				ToneHeader.Size += LayerHeader.nArt*sizeof(struct SGE_WavArt_t);
-			}
-
-			//! Write the tone header
-			fseek(SGEFile, FileOffs_ToneHeader, SEEK_SET);
-			if(!fwrite(&ToneHeader, sizeof(ToneHeader), 1, SGEFile)) return SGE_LOCALDB_ERROR_IO;
-			fseek(SGEFile, 0, SEEK_END);
+			int Result = WriteTone(SGEFile, Db, Tone);
+			if(Result != SGE_LOCALDB_ERROR_NONE) return Result;
 		}
 
 		//! Write the track offsets and then the final track data
@@ -612,6 +651,13 @@ int SGE_LocalDb_Export(struct SGE_LocalDb_t *Db, FILE *SGEFile, FILE *WavFile, c
 		}
 	}
 	if(!fwrite(&NextEntryOffs, sizeof(NextEntryOffs), 1, SGEFile)) return SGE_LOCALDB_ERROR_IO;
+
+	//! Write the global tone bank
+	if(Db->nGlobalTones) {
+		fseek(SGEFile, FileOffs_GlobalToneBank, SEEK_SET);
+		int Result = WriteGlobalToneBank(SGEFile, Db);
+		if(Result != SGE_LOCALDB_ERROR_NONE) return Result;
+	}
 
 	//! Finally, write the header
 	fseek(SGEFile, FileBeginOffs, SEEK_SET);

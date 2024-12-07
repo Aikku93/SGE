@@ -12,10 +12,12 @@ void SGE_LocalDb_Init(struct SGE_LocalDb_t *Db) {
 	Db->nWaves = 0;
 	Db->nTones = 0;
 	Db->nSongs = 0;
+	Db->nGlobalTones = 0;
 	Db->Waves = NULL;
 	Db->Tones = NULL;
 	Db->Songs = NULL;
 	Db->WavRemapTable = NULL;
+	Db->ToneRemapTable = NULL;
 }
 
 /************************************************/

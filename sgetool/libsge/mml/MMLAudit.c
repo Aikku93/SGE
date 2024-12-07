@@ -390,7 +390,7 @@ BEGIN_COMMAND(_NoteEvent, uint16_t TicksMinusOne) {
 		//! 0h..Bh: Normal note
 		if(
 			MML->NotifyKeyOn &&
-			MML->NotifyKeyOn(MML->NotifyUserdata, Track->Program, Track->Octave + Track->Transpose + Cmd, Vel) < 0
+			MML->NotifyKeyOn(MML->NotifyUserdata, Track->Program, Track->Octave + Track->Transpose + Cmd, Vel, MML->UseGlobalToneBank) < 0
 		) {
 			MML_AppendWarningGlobal(MML, "Audit: Key-on event with missing region or program.");
 		}

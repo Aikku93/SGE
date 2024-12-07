@@ -543,12 +543,12 @@ static int MML_Command_Program(struct MML_t *MML) {
 			MML_AppendError(MML, "MIDI program handling not provided. Please report this error.", &ProgramOffs);
 			return MML_ERROR;
 		}
-		Program = MML->NotifyMIDIProgramChange(MML->NotifyUserdata, Patch, CC0, CC32, IsDrumKit);
+		Program = MML->NotifyMIDIProgramChange(MML->NotifyUserdata, Patch, CC0, CC32, IsDrumKit, MML->UseGlobalToneBank);
 		if(Program < 0) {
 			MML_AppendWarning(MML, "MIDI program not found in sound bank. Trying base bank.", &ProgramOffs);
-			Program = MML->NotifyMIDIProgramChange(MML->NotifyUserdata, Patch, 0, 0, IsDrumKit);
+			Program = MML->NotifyMIDIProgramChange(MML->NotifyUserdata, Patch, 0, 0, IsDrumKit, MML->UseGlobalToneBank);
 			if(Program < 0 && IsDrumKit) {
-				Program = MML->NotifyMIDIProgramChange(MML->NotifyUserdata, 0, 0, 0, IsDrumKit);
+				Program = MML->NotifyMIDIProgramChange(MML->NotifyUserdata, 0, 0, 0, IsDrumKit, MML->UseGlobalToneBank);
 			}
 			if(Program < 0) {
 				MML_AppendError(MML, "MIDI program not found in sound bank, or out of memory.", &ProgramOffs);
@@ -1244,6 +1244,26 @@ static int MML_Command_Global_TicksPerBeat(struct MML_t *MML) {
 		return MML_ERROR;
 	}
 	MML->TicksPerBeat = Ticks;
+	return MML_OK;
+}
+
+static int MML_Command_Global_UseGlobalTones(struct MML_t *MML) {
+	//! NOTE: Allow whitespace between $cmd and = and the actual value
+	MML_ConsumeWhitespace(MML);
+	if(MML_PeekNextChar(MML) != '=') {
+		MML_AppendErrorCurrentOffset(MML, "Expected `=`.");
+		return MML_ERROR;
+	}
+	MML_ConsumeChars(MML, 1, 1);
+	struct MML_InputOffs_t ValueOffs; MML_GetInputOffset(MML, &ValueOffs);
+	if(MML_StringMatchAndConsume(MML, "true", 1)) {
+		MML->UseGlobalToneBank = 1;
+	} else if(MML_StringMatchAndConsume(MML, "false", 1)) {
+		MML->UseGlobalToneBank = 0;
+	} else {
+		MML_AppendErrorContext(MML, "Expected `true` or `false`.");
+		return MML_ERROR;
+	}
 	return MML_OK;
 }
 

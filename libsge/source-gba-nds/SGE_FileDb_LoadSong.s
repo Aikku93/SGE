@@ -25,6 +25,7 @@ SGE_FileDb_LoadSong:
 	CMP	r0, #0x00
 	BEQ	.LExit_r3
 	STR	r1, [r0, #0x08] @ Store Wave.dbLink.Db = Db
+	MOV	ip, r1
 	PUSH	{r2-r6}
 0:	CMP	r2, #0x00       @ Need to mark as Persistent?
 	BEQ	1f
@@ -44,7 +45,14 @@ SGE_FileDb_LoadSong:
 	ADD	r1, #0x10
 	LSL	r3, #0x02       @ Song.Tones[] -> r1
 	ADD	r1, r3
-0:	CMP	r2, #0x00
+0:	CMP	r2, #0x00       @ Using local tone bank?
+	BNE	.LLoadTones_Loop
+
+.LLoadTones_UseGlobalBank:
+	MOV	r1, ip
+	LDRB	r2, [r1, #0x10] @ nTones = GlobalBank.nTones -> r2?
+	ADD	r1, #0x10+0x04  @ &GlobalBank.Tones[] -> r1
+	CMP	r2, #0x00
 	BEQ	.LLoadTones_Done
 
 .LLoadTones_Loop:

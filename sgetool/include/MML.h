@@ -216,8 +216,21 @@ struct MML_TrackListing_t {
 
 //! MML parser structure
 //! MML_NotifyMIDIProgramChange() must return a local program index (or a negative value for errors).
-typedef int (*MML_NotifyMIDIProgramChangeFnc_t)(void *Userdata, uint8_t Patch, uint8_t CC0, uint8_t CC32, uint8_t IsDrumKit);
-typedef int (*MML_NotifyKeyOnFnc_t)(void *Userdata, uint8_t Program, uint8_t Key, uint8_t Vel);
+typedef int (*MML_NotifyMIDIProgramChangeFnc_t)(
+	void *Userdata,
+	uint8_t Patch,
+	uint8_t CC0,
+	uint8_t CC32,
+	uint8_t IsDrumKit,
+	uint8_t UseGlobalToneBank
+);
+typedef int (*MML_NotifyKeyOnFnc_t)(
+	void *Userdata,
+	uint8_t Program,
+	uint8_t Key,
+	uint8_t Vel,
+	uint8_t UseGlobalToneBank
+);
 struct MML_t {
 	uint32_t ErrorDepth;
 	struct MML_ErrorInfo_t ErrorData[MML_MAX_ERROR_DEPTH];
@@ -228,6 +241,7 @@ struct MML_t {
 	MML_NotifyKeyOnFnc_t NotifyKeyOn;
 
 	//! Global state
+	uint8_t UseGlobalToneBank;
 	int32_t TicksPerBeat;
 
 	//! Current track state
@@ -276,7 +290,8 @@ int MML_Init(
 	uint32_t DataSize,
 	MML_NotifyMIDIProgramChangeFnc_t NotifyMIDIProgramChange,
 	MML_NotifyKeyOnFnc_t             NotifyKeyOn,
-	void                            *NotifyUserdata
+	void                            *NotifyUserdata,
+	uint8_t UseGlobalToneBank
 );
 
 //! Destroy parser

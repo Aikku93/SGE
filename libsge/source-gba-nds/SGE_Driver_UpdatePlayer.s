@@ -341,12 +341,30 @@ SGE_Driver_UpdatePlayer:
 .LGetToneFromProgram:
 	LDR	r1, [sp, #0x00]    @ Player.Song -> r1
 	LDR	r1, [r1, #0x10]
+	MOV	r8, r1
 	LDRB	r2, [r1, #0x00]    @ nTracks -> r2
 	LDRB	r3, [r1, #0x01]    @ nTones -> r3
 	ADD	r1, #0x10          @ Seek to Song.TrkOffs[]
 	LSL	r2, #0x02          @ Seek to Song.Tones[]
 	ADD	r1, r2
 	LDRB	r2, [r4, #0x02]    @ Program -> r2
+	CMP	r3, #0x00          @ Using local tone bank?
+	BNE	.LGetToneFromProgram_Search
+
+.LGetToneFromProgram_UseGlobalBank:
+	MOV	r1, r8             @ Song.Db -> r1
+	LDR	r1, [r1, #0x08]
+	LSR	r3, r1, #0x01      @ If song was loaded into memory, database pointer is ready
+#if defined(SGE_PLATFORM_HAVE_FILEDB)
+	BCC	1f
+#endif
+0:	MOV	r1, r8             @ Database -> r1
+	LSL	r3, #0x05
+	SUB	r1, r3
+1:	LDRB	r3, [r1, #0x10]    @ GlobalBank.nTones -> r3
+	ADD	r1, #0x10+0x04     @ &GlobalBank.Tones[] -> r1
+
+.LGetToneFromProgram_Search:
 	CMP	r2, r3             @ Invalid program?
 	BCS	3f
 0:	CMP	r2, #0x00          @ Seek to Tone
