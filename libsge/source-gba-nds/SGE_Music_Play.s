@@ -49,8 +49,7 @@ SGE_Music_PlayEx:
 	MOV	r2, #0x80
 0:	LSR	r4, r3, #0x10   @ TempoStretch = MIN(0xFFFF, TempoStretch)
 	BEQ	0f
-	MOV	r3, #0x00
-	MVN	r3, r3
+	MVN	r3, r4
 	LSR	r3, #0x10
 0:	MOV	lr, r3          @ If TempoStretch==0, then do NOT add Song to the pointers
 	CMP	r3, #0x00
