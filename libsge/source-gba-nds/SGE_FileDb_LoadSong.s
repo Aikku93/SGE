@@ -24,7 +24,7 @@ SGE_FileDb_LoadSong:
 	POP	{r1,r2,r3}
 	CMP	r0, #0x00
 	BEQ	.LExit_r3
-	STR	r1, [r0, #0x08] @ Store Wave.dbLink.Db = Db
+	STR	r1, [r0, #0x08] @ Store Song.dbLink.Db = Db
 	MOV	ip, r1
 	PUSH	{r2-r6}
 0:	CMP	r2, #0x00       @ Need to mark as Persistent?
@@ -45,15 +45,8 @@ SGE_FileDb_LoadSong:
 	ADD	r1, #0x10
 	LSL	r3, #0x02       @ Song.Tones[] -> r1
 	ADD	r1, r3
-0:	CMP	r2, #0x00       @ Using local tone bank?
-	BNE	.LLoadTones_Loop
-
-.LLoadTones_UseGlobalBank:
-	MOV	r1, ip
-	LDRB	r2, [r1, #0x10] @ nTones = GlobalBank.nTones -> r2?
-	ADD	r1, #0x10+0x04  @ &GlobalBank.Tones[] -> r1
-	CMP	r2, #0x00
-	BEQ	.LLoadTones_Done
+0:	CMP	r2, #0x00       @ Loaded songs must NOT use the global tone bank
+	BEQ	.LExit_UnloadInstance
 
 .LLoadTones_Loop:
 	LDMIA	r1!, {r3}       @ nLayers -> r3?
@@ -97,6 +90,17 @@ SGE_FileDb_LoadSong:
 
 .LExit_r3:
 	@MOV	r0, r0          @ Return Song
+	BX	r3
+
+.LExit_UnloadInstance:
+	LDR	r3, [r0, #0x08] @ Song.dbLink.Db -> r3
+	LDRH	r0, [r0, #0x02] @ FreeInstance(Song.Idx, nSongs, SongTab, Callbacks)
+	LDRH	r1, [r3, #0x02]
+	LDR	r2, [r3, #0x0C]
+	LDR	r3, [r3, #0x04]
+	BL	SGE_FileDb_FreeInstance
+	POP	{r2-r6}
+	MOV	r0, #0x00       @ Retur NULL
 	BX	r3
 
 ASM_FUNC_END(SGE_FileDb_LoadSong)
