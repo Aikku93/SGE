@@ -386,6 +386,7 @@ SGE_Driver_UpdatePlayer:
 @ This call only impacts r0, but updates r6,r7
 
 #if (!defined(__NDS__) || __NDS__ != 9)
+ASM_ALIGN(4)
 .LFetchNybble:
 	BX	pc
 #endif
