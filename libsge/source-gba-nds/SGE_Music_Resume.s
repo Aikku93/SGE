@@ -9,8 +9,10 @@ ASM_FUNC_GLOBAL(SGE_Music_Resume)
 ASM_FUNC_BEG   (SGE_Music_Resume, ASM_FUNCSECT_TEXT;ASM_MODE_THUMB)
 
 SGE_Music_Resume:
-	LDR	r1, [r0, #0x10] @ Song = Player.Song
+	LDR	r1, [r0, #0x10] @ Song = Player.Song? (ie. check if Resume was called when nothing was playing)
 	MOV	r2, #0x01       @ TempoStretch = 100%
+	CMP	r1, #0x00
+	BEQ	.Lbxlr
 	LSL	r2, #0x08
 	@B	SGE_Music_ResumeEx
 
@@ -26,11 +28,11 @@ ASM_FUNC_GLOBAL(SGE_Music_ResumeEx)
 ASM_FUNC_BEG   (SGE_Music_ResumeEx, ASM_FUNCSECT_TEXT;ASM_MODE_THUMB)
 
 SGE_Music_ResumeEx:
-	LDRH	r3, [r0, #0x02] @ Ensure track is paused and TempoStretch != 0
-	CMP	r2, #0x00
-	BEQ	.Lbxlr
+	LDRH	r3, [r0, #0x02] @ Ensure track is paused
 	CMP	r3, #0x00
 	BNE	.Lbxlr
+	CMP	r2, #0x00       @ If TempoStretch == 0, we update the song pointer but do nothing else
+	BEQ	.LExit_SetSongPtr
 0:	MOV	r3, lr
 	PUSH	{r3-r5}
 	MOV	r3, r0
@@ -51,9 +53,11 @@ SGE_Music_ResumeEx:
 2:	ADD	r3, #SGE_TRACK_SIZE
 	SUB	r4, #0x01       @ --nTracks?
 	BNE	1b
-3:	STR	r1, [r0, #0x10] @ Player.Song = Song
-	STRH	r2, [r0, #0x02] @ Store TempoStretch, and playback resumes
+3:	STRH	r2, [r0, #0x02] @ Store TempoStretch, and playback resumes
 	POP	{r3-r5}
+
+.LExit_SetSongPtr:
+	STR	r1, [r0, #0x10] @ Player.Song = Song
 	BX	r3
 
 .LFixAddr:
