@@ -457,10 +457,10 @@ int SGE_LocalDb_Export(struct SGE_LocalDb_t *Db, FILE *SGEFile, FILE *WavFile, c
 
 		//! Set low-pass cut-off frequency
 		double LowpassFc; {
-			LowpassFc = NewSampleRate;
+			LowpassFc = NewSampleRate / WavOpt->WavOversampleRate;
 			if(WavOpt->WavLowpassCutoff != 0.0) {
 				//! SRCConfig.Cutoff is 2*Fc, so multiply Options->WavLowpassCutoff by 2
-				LowpassFc = MIN(LowpassFc, WavOpt->WavLowpassCutoff*2.0);
+				LowpassFc = MIN(LowpassFc, WavOpt->WavLowpassCutoff * 2.0);
 			}
 			LowpassFc = MIN(LowpassFc / (double)Wav->Header.Freq, 1.0);
 		}
