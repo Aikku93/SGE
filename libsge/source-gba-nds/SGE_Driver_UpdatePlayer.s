@@ -100,6 +100,7 @@ SGE_Driver_UpdatePlayer:
 	LDRSH	r3, [r4, r2]        @ Phase -> r3
 	MUL	r0, r1
 	LSR	r0, #0x08-SGE_BPM_FRACBITS     @ int(StretchedTempo) -> r0
+	BEQ	.LExit                         @  Immediately exit when paused
 	LSR	r2, r0, #(10+SGE_BPM_FRACBITS) @ Clip StretchedTempo to max 1023BPM
 	BEQ	0f
 	MVN	r0, r2
