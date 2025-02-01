@@ -60,8 +60,7 @@ SGE_Music_PlayEx:
 	STRH	r3, [r0, #0x02] @ Store TempoStretch
 	MOV	r3, #120
 	LSL	r2, r3, #0x10
-	ADD	r2, #0x01
-	STR	r2, [r0, #0x08] @ Store Tempo = 120, TimePhase = 1 (must not be 0)
+	STR	r2, [r0, #0x08] @ Store Tempo = 120, TimePhase = 0
 	STR	r3, [r0, #0x0C]
 	MOV	ip, r0          @ Player -> ip
 	ADD	r0, #0x20       @ Track = &Player->Tracks[] -> r0
