@@ -8,17 +8,33 @@ Definitely not the fastest by a wide margin (there are way too many features imp
 
 * Mono/stereo waveform support (with support for linear interpolation)
 * Waveforms can be PCM8, PCM16 (NDS only), or ADPCM (all features supported for all formats)
+  * ADPCM is supported on GBA as well, without limitations - resampling and interpolation are implemented
 * Volume ramping (by slicing a mix chunk into 2^N pieces or less, as needed)
 * Reverb processing (using series all-pass filters with feedback and low-pass filtering)
   * Not just a simple delay line; this is REAL, diffuse-sounding reverb (with crosstalk to improve stereo width).
   * Defined using parameters such as feedback, room density, etc.; filter taps are calculated at run-time.
+  * Choice between "simple" processing (one lowpass filter per sample), and "fancy" processing (one low-pass filter per all-pass tap)
 * All mixer loops are extremely optimized for GBA
   * NDS9 is mostly optimized for ADPCM playback, and NDS7 doesn't have much room for optimization.
+  * GBA dynamically loads the mixer loops from ROM into IWRAM to reduce the memory footprint
 * Sampling rate and number of voices is controlled at run-time
 * Support for 2x oversampling (using linear interpolation) to reduce hardware aliasing artifacts
   * This is really only needed for GBA, where the usual playback rates are not nice multiples of 32768Hz.
+* Music and waveforms can be loaded from disk/card using a simple IO interface (read/allocate/free)
 * Music is defined using MML, combined with a DLS soundbank (SF2 and MIDI support planned... eventually)
 * Extremely feature-rich (read as: overengineered) compiler, with many, many options regarding waveform conversions.
+
+Additionally, the library can be very thoroughly configured with compile-time switches for different purposes/trade-offs:
+* Enabling/disabling specific waveform formats
+* Enabling/disabling resampling interpolation
+  * Including forcibly enabling/disabling it, regardless of waveform options
+* Enabling/disabling reverb
+  * Including switches for "fancy" reverb processing and "fake" reverb (via a second release phase)
+* Enabling/disabling a fixed ~60Hz update rate mode
+  * The fixed ~60Hz rate allows more optimizations because more assumptions can be made
+* Resolution of the key->frequency table, mixer fractional bits, reverb buffer bits
+* Resolution of volume ramping subdivisions
+* Loop unrolling
 
 ## ... Why? Just why?
 
