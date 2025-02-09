@@ -1003,7 +1003,10 @@ ASM_MODE_THUMB
 	ADD	r3, #0x7E                 @ Bias Pan to 00h..FCh
 	ASR	r7, r3, #0x1F
 	BIC	r3, r7
-	LSL	r3, #0x07                 @ Pan *= 10000h / FCh
+	CMP	r3, #0xFC                 @ Clamp Pan to 00h..FCh
+	BCC	0f
+	MOV	r3, #0xFC
+0:	LSL	r3, #0x07                 @ Pan *= 10000h / FCh
 	LSR	r7, r3, #0x06             @ x*10000h/FCh / 4 ~= (1 + 2^-6)(1 + 2^-12)*2^6
 	ADD	r3, r7                    @ We scale by 2^7, and then round off to get better precision
 	LSR	r7, r3, #0x0C             @ We need to divide by 4 to scale by Pi/2, because CosSin uses z = x*2Pi
