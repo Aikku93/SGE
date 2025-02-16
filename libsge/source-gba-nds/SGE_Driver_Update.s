@@ -1695,8 +1695,12 @@ ASM_MODE_THUMB
 	LDRB	r5, [r4, #0x0E+0*5+0]     @ EG1c -> r5
 	EG_GetLinearStep
 	ADD	r0, r5                    @ EG1 += EG1c?
-	LSR	r5, r0, #0x10
+	LSR	r7, r0, #0x10
 	BNE	.LMixer_VoxLoop_UpdateEG1_Attack_Done
+	ADD	r5, r0                    @ NextEG1 = EG1+EG1c
+	LSR	r5, #0x10-1               @ NextEG1 >= 1.5? Snap to next phase
+	CMP	r5, #0x03
+	BCS	.LMixer_VoxLoop_UpdateEG1_Attack_Done
 #if SGE_USE_CURVED_ATTACK
 	MOV	r7, r0                    @ Vol *= 1-(1-EG1)^2 [1.7 + 1.16 = 1.23fxp]
 	MUL	r7, r7                    @ 1-(1-x)^2 = 2*x - x^2
@@ -1730,8 +1734,12 @@ ASM_MODE_THUMB
 	LDRB	r5, [r4, #0x0E+0*5+1]     @ EG1c -> r5
 	EG_GetLinearStep
 	ADD	r0, r5                    @ EG1 += EG1c?
-	LSR	r5, r0, #0x10
+	LSR	r7, r0, #0x10
 	BNE	.LMixer_VoxLoop_UpdateEG1_Hold_Done
+	ADD	r5, r0                    @ NextEG1 = EG1+EG1c
+	LSR	r5, #0x10-1               @ NextEG1 >= 1.5? Snap to next phase
+	CMP	r5, #0x03
+	BCS	.LMixer_VoxLoop_UpdateEG1_Hold_Done
 	B	.LMixer_VoxLoop_UpdateEG1_Done
 
 .LMixer_VoxLoop_UpdateEG1_Hold_Done:
@@ -1801,8 +1809,12 @@ ASM_MODE_THUMB
 	LDRB	r5, [r4, #0x0E+1*5+0]     @ EG2c -> r5
 	EG_GetLinearStep
 	ADD	r0, r5                    @ EG2 += EG2c?
-	LSR	r5, r0, #0x10
+	LSR	r7, r0, #0x10
 	BNE	.LMixer_VoxLoop_UpdateEG2_Attack_Done
+	ADD	r5, r0                    @ NextEG2 = EG2+EG2c
+	LSR	r5, #0x10-1               @ NextEG2 >= 1.5? Snap to next phase
+	CMP	r5, #0x03
+	BCS	.LMixer_VoxLoop_UpdateEG2_Attack_Done
 	B	.LMixer_VoxLoop_UpdateEG2_Done
 
 .LMixer_VoxLoop_UpdateEG2_Attack_Done:
@@ -1817,8 +1829,12 @@ ASM_MODE_THUMB
 	LDRB	r5, [r4, #0x0E+1*5+1]     @ EG2c -> r5
 	EG_GetLinearStep
 	ADD	r0, r5                    @ EG2 += EG2c?
-	LSR	r5, r0, #0x10
+	LSR	r7, r0, #0x10
 	BNE	.LMixer_VoxLoop_UpdateEG2_Hold_Done
+	ADD	r5, r0                    @ NextEG2 = EG2+EG2c
+	LSR	r5, #0x10-1               @ NextEG2 >= 1.5? Snap to next phase
+	CMP	r5, #0x03
+	BCS	.LMixer_VoxLoop_UpdateEG2_Hold_Done
 	B	.LMixer_VoxLoop_UpdateEG2_Done
 
 .LMixer_VoxLoop_UpdateEG2_Hold_Done:
