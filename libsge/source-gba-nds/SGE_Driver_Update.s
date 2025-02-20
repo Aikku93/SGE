@@ -1874,6 +1874,24 @@ ASM_MODE_ARM
 @ r5: &Driver
 
 .LUpdatePlayers:
+#if SGE_VARIABLE_SYNC_RATE
+	LDRH	r0, [r5, #0x0C]          @ Get update BPM -> r7
+	LDRH	r1, [r5, #0x0E]          @ See SGE_Driver_UpdatePlayer.s for details on this calculation
+	LSL	r2, r0, #0x02
+	ADD	r0, r2
+# if (SGE_BPM_FRACBITS > 0)
+	LSL	r0, #SGE_BPM_FRACBITS
+# endif
+# if (SGE_QUARTERNOTE_TICKS == 48)
+	LSL	r1, #0x02
+# else
+#  error "FIXME: BufLen*QUARTERNOTE_TICKS/12"
+# endif
+	LSR	r2, r1, #0x01            @ <- Apply rounding
+	ADD	r0, r2
+	BL	__aeabi_uidiv
+	MOV	r7, r0
+#endif
 	LDR	r4, [r5, #0x10]          @ Player = PlayersList -> r4
 #if (!defined(__NDS__) || __NDS__ != 9)
 	LDR	r6, =SGE_Driver_UpdatePlayer

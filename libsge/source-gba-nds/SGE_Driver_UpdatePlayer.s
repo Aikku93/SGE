@@ -4,11 +4,6 @@
 #include "SGE-GBANDSHw.h"
 /************************************************/
 
-#define WHOLENOTE_TICKS 192 //! Ticks per whole note
-#define QUARTERNOTE_TICKS (WHOLENOTE_TICKS/4)
-
-/************************************************/
-
 .macro FETCH_NYBBLE
 #if (defined(__NDS__) && __NDS__ == 9)
 	BLX	.LFetchNybbleARM
@@ -59,31 +54,15 @@ The maximum fractional precision we can use is 5 bits:
 @  r4: &Player (must be preserved)
 @  r5: &Driver (must be preserved)
 @  r6:         (must be preserved)
-@  r7-fp: Saved
+@  r7:  UpdateBPM (must be preserved)
+@  r8-fp: Saved
 
 ASM_FUNC_GLOBAL(SGE_Driver_UpdatePlayer)
 ASM_FUNC_BEG   (SGE_Driver_UpdatePlayer, ASM_FUNCSECT_TEXT;ASM_MODE_THUMB)
 
 SGE_Driver_UpdatePlayer:
 #if SGE_VARIABLE_SYNC_RATE
-	PUSH	{lr}
-	LDRH	r0, [r5, #0x0C]     @ Get update BPM
-	LDRH	r1, [r5, #0x0E]
-	LSL	r2, r0, #0x02
-	ADD	r0, r2
-# if (SGE_BPM_FRACBITS > 0)
-	LSL	r0, #SGE_BPM_FRACBITS
-# endif
-# if (QUARTERNOTE_TICKS == 48)
-	LSL	r1, #0x02
-# else
-#  error "FIXME: BufLen*QUARTERNOTE_TICKS/12"
-# endif
-	LSR	r2, r1, #0x01       @ <- Apply rounding
-	ADD	r0, r2
-	BL	__aeabi_uidiv
-	MOV	r7, r0
-	PUSH	{r4-r7}
+	PUSH	{r4-r7,lr}
 #else
 	PUSH	{r4-r6,lr}
 #endif
@@ -267,9 +246,11 @@ SGE_Driver_UpdatePlayer:
 #if (!defined(__NDS__) || __NDS__ == 7)
 	POP	{r4-r7}
 # if SGE_VARIABLE_SYNC_RATE
-	POP	{r7}
-# endif
+	POP	{r0}
+	BX	r0
+# else
 	BX	r7
+# endif
 #else
 # if SGE_VARIABLE_SYNC_RATE
 	POP	{r4-r7,pc}

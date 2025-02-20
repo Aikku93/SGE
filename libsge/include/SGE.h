@@ -93,6 +93,8 @@
 #  define SGE_PLAYER_HEADER_SIZE (0x38)
 #  define SGE_TRACK_SIZE         (0x30 + 0x08*SGE_MAX_STACK_DEPTH + ((0x01*SGE_MAX_STACK_DEPTH+7)&~7))
 # endif
+# define SGE_WHOLENOTE_TICKS     (192) //! Ticks per whole note
+# define SGE_QUARTERNOTE_TICKS   (SGE_WHOLENOTE_TICKS/4)
 #endif
 
 //! SGE_Reverb_InitReverbData() and SGE_Reverb_GetLineLengths()

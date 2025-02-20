@@ -42,35 +42,35 @@ SGE_Driver_SongCommands:
 
 @ 2h: Note (1/4)
 .LSongCommand2h:
-	MOV	r0, #WHOLENOTE_TICKS/4-1
+	MOV	r0, #SGE_WHOLENOTE_TICKS/4-1
 	B	.LReadNoteCommand
 
 /************************************************/
 
 @ 3h: Note (1/8)
 .LSongCommand3h:
-	MOV	r0, #WHOLENOTE_TICKS/8-1
+	MOV	r0, #SGE_WHOLENOTE_TICKS/8-1
 	B	.LReadNoteCommand
 
 /************************************************/
 
 @ 4h: Note (1/16)
 .LSongCommand4h:
-	MOV	r0, #WHOLENOTE_TICKS/16-1
+	MOV	r0, #SGE_WHOLENOTE_TICKS/16-1
 	B	.LReadNoteCommand
 
 /************************************************/
 
 @ 5h: Note (1/32)
 .LSongCommand5h:
-	MOV	r0, #WHOLENOTE_TICKS/32-1
+	MOV	r0, #SGE_WHOLENOTE_TICKS/32-1
 	B	.LReadNoteCommand
 
 /************************************************/
 
 @ 6h: Note (1/64)
 .LSongCommand6h:
-	MOV	r0, #WHOLENOTE_TICKS/64-1
+	MOV	r0, #SGE_WHOLENOTE_TICKS/64-1
 	B	.LReadNoteCommand
 
 /************************************************/
@@ -1067,7 +1067,7 @@ ASM_ALIGN(4)
 	CMP	r0, #0x0E                      @ Eh = Triplet
 	BHI	.LFetchTimeCode_Ticks          @ Fh = Tick-coded word
 	BEQ	.LFetchTimeCode_Triplet
-	MOV	r3, #QUARTERNOTE_TICKS*4       @ Base = 1/1
+	MOV	r3, #SGE_WHOLENOTE_TICKS       @ Base = 1/1
 .LFetchTimeCode_DecodeNormal:
 	SUB	r1, r0, #0x07                  @ Shift -> r1. Tied?
 	BCS	1f
@@ -1085,7 +1085,7 @@ ASM_ALIGN(4)
 	FETCH_NYBBLE
 	CMP	r0, #0x0E                      @ Eh,Eh..Fh = 1/128 (triplet)
 	BCS	2f
-1:	MOV	r3, #QUARTERNOTE_TICKS*4 * 2/3 @ Base = 1/1 triplet
+1:	MOV	r3, #SGE_WHOLENOTE_TICKS * 2/3 @ Base = 1/1 triplet
 	B	.LFetchTimeCode_DecodeNormal
 2:	ADD	r2, #0x01                      @ nTicks += Base >> Shift (=1 tick)
 	CMP	r0, #0x0F                      @ Eh,Fh = 1/128 (tied triplet)
