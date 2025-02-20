@@ -48,14 +48,8 @@
 //!  -STEREO_WAVEFORMS enables global support for stereo waveforms. This will
 //!   add a large amount of code in RAM, but allows direct mixing of stereo
 //!   waveforms in optimized mixing loops instead of using separate voices.
-//!  -USE_CURVED_ATTACK bends the attack curve to use a reverse-quadratic
-//!   curve (that is: 1-(1-x)^2 = 2*x-x^2). This can sound more natural.
 //!  -EG1_LOG2THRESHOLD defines the threshold below which a voice will be
 //!   killed when in the Decay or Release phase.
-//!  -LFO_RAMP_FREQ enables ramping of the LFO frequency over the delay time,
-//!   and LFO_RAMP_AMP enables ramping of the LFO amplitude over the delay
-//!   time. Note that these options only apply when a waveform articulation
-//!   is using the ramping feature.
 //!  -VOLBITS controls the precision of the mixing volumes. Note that this is
 //!   NOT like the GBA control VOLFRACBITS; whereas VOLFRACBITS refers to the
 //!   precision to preserve /after/ multiplying by the 1.7fxp volume, VOLBITS
@@ -106,10 +100,7 @@
 #define SGE_RECPLUT_PRECISION  16 //! Precision of the reciprocals table (ie. 2^PRECISION/x)
 #define SGE_BPM_FRACBITS        5 //! Fractional bits of tempo counter
 #define SGE_STEREO_WAVEFORMS    1 //! 0 = Mono waveforms only, 1 = Enable stereo-sampled waveforms
-#define SGE_USE_CURVED_ATTACK   1 //! 0 = Linear attack, 1 = Reverse-quadratic attack
 #define SGE_EG1_LOG2THRESHOLD   8 //! Voice is killed when EG1 drops below 1.0*2^-n
-#define SGE_LFO_RAMP_FREQ       1 //! 0 = Constant frequency, 1 = Ramp frequency from 0Hz over ramp time
-#define SGE_LFO_RAMP_AMP        1 //! 0 = Constant amplitude, 1 = Ramp amplitude from 0.0 to 1.0 over ramp time
 #define SGE_MIXER_VOLBITS      14 //! Volume bits to use in mix (maximum 14)
 #define SGE_USE_VOLRAMP         0 //! 0 = No volume ramping, 1 = Apply volume ramping
 #define SGE_USE_VOLSUBDIV       1 //! 0 = No chunk subdivision for volume, 1 = Subdivide mix chunk as needed

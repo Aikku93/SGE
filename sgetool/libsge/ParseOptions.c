@@ -41,7 +41,13 @@ int SGE_ParseOptions(
 )
 #define OPT_MATCH_ARG(x) (\
 	!memcmp(OptStr, x, strlen(x)) && \
-	(OptStr[strlen(x)] == '\0' || OptStr[strlen(x)] == ')' || isspace(OptStr[strlen(x)])) && \
+	( \
+		OptStr[strlen(x)] == '\0' || \
+		OptStr[strlen(x)] == ')'  || \
+		OptStr[strlen(x)] == '+'  || \
+		OptStr[strlen(x)] == '_'  || \
+		isspace(OptStr[strlen(x)]) \
+	) && \
 	((OptStr += strlen(x)) || 1) \
 )
 		for(;;) {
@@ -264,23 +270,28 @@ int SGE_ParseOptions(
 		} else if(OPT_MATCH("-oversample:")) {
 			double Rate;
 			const char *RateStr = OptStr;
-			if(!SGE_ReadDouble(&Rate, OptStr, &OptStr)) {
+			if(!SGE_ReadRelativeKey(&Rate, OptStr, &OptStr)) {
 				Parsed = 0;
-			} else if(!isnormal(Rate)) {
+			} else if(!isnormal(Rate) || Rate <= 0.0 || Rate > 100.0) {
 				Success = 0;
 			} else {
-				//! If oversampling was specified as semitones, parse it now
-				       if(OPT_MATCH_ARG("c") || OPT_MATCH_ARG("cents")) {
-					Rate = pow(2.0, Rate/1200.0);
-				} else if(OPT_MATCH_ARG("st")) {
-					Rate = pow(2.0, Rate/12.0);
-				}
-				if(!isnormal(Rate) || Rate <= 0.0 || Rate > 100.0) {
-					Success = 0;
-				} else Options->WavOversampleRate = Rate;
+				Options->WavOversampleRate = Rate;
 			}
 			if(!Parsed || !Success) {
 				if(ErrorLogger) ErrorLogger(ErrorLogger_Userdata, "ERROR: Invalid oversampling rate (-oversample:%s).\n", RateStr);
+			}
+		} else if(OPT_MATCH("-transpose:")) {
+			double Rate;
+			const char *RateStr = OptStr;
+			if(!SGE_ReadRelativeKey(&Rate, OptStr, &OptStr)) {
+				Parsed = 0;
+			} else if(!isnormal(Rate) || Rate <= 0.0 || Rate > 100.0) {
+				Success = 0;
+			} else {
+				Options->WavTransposeRate = Rate;
+			}
+			if(!Parsed || !Success) {
+				if(ErrorLogger) ErrorLogger(ErrorLogger_Userdata, "ERROR: Invalid transposition (-transpose:%s).\n", RateStr);
 			}
 		} else if(OPT_MATCH("-wavcull:")) {
 			const char *CondStr = OptStr;
@@ -371,6 +382,66 @@ int SGE_ParseOptions(
 			}
 			if(!Parsed || !Success) {
 				if(ErrorLogger) ErrorLogger(ErrorLogger_Userdata, "ERROR: Invalid SRC dither level (-src-dither:%s).\n", LevelStr);
+			}
+		} else if(OPT_MATCH("-eg1attack:")) {
+			const char *ShpStr = OptStr;
+			       if(OPT_MATCH_ARG("linear")) {
+				Options->ToneEG1ParabolicAttack = 0;
+			} else if(OPT_MATCH_ARG("parabolic")) {
+				Options->ToneEG1ParabolicAttack = 1;
+			} else {
+				Parsed = 0;
+			}
+			if(!Parsed) {
+				if(ErrorLogger) ErrorLogger(ErrorLogger_Userdata, "ERROR: Unknown EG1 attack shape (-eg1attack:%s).\n", ShpStr);
+			}
+		} else if(OPT_MATCH("-lfoampramp:")) {
+			const char *CondStr = OptStr;
+			       if(OPT_MATCH_ARG("y") || OPT_MATCH_ARG("Y")) {
+				Options->ToneLFOAmpRamp = 1;
+			} else if(OPT_MATCH_ARG("n") || OPT_MATCH_ARG("N")) {
+				Options->ToneLFOAmpRamp = 0;
+			} else {
+				Parsed = 0;
+			}
+			if(!Parsed) {
+				if(ErrorLogger) ErrorLogger(ErrorLogger_Userdata, "ERROR: Unknown LFO amplitude ramp option (-lfoampramp:%s).\n", CondStr);
+			}
+		} else if(OPT_MATCH("-lfofreqramp:")) {
+			const char *CondStr = OptStr;
+			       if(OPT_MATCH_ARG("y") || OPT_MATCH_ARG("Y")) {
+				Options->ToneLFOFreqRamp = 1;
+			} else if(OPT_MATCH_ARG("n") || OPT_MATCH_ARG("N")) {
+				Options->ToneLFOFreqRamp = 0;
+			} else {
+				Parsed = 0;
+			}
+			if(!Parsed) {
+				if(ErrorLogger) ErrorLogger(ErrorLogger_Userdata, "ERROR: Unknown LFO frequency ramp option (-lfofreqramp:%s).\n", CondStr);
+			}
+		} else if(OPT_MATCH("-lfoshape:")) {
+			const char *ShpStr = OptStr;
+			       if(OPT_MATCH_ARG("sine")) {
+				Options->ToneLFOShape = 0;
+			} else if(OPT_MATCH_ARG("tri") || OPT_MATCH_ARG("triangle")) {
+				Options->ToneLFOShape = 1;
+			} else if(OPT_MATCH_ARG("saw") || OPT_MATCH_ARG("sawtooth")) {
+				Options->ToneLFOShape = 2;
+			} else if(OPT_MATCH_ARG("square")) {
+				Options->ToneLFOShape = 3;
+			} else if(OPT_MATCH_ARG("noise")) {
+				Options->ToneLFOShape = 4;
+			} else {
+				Parsed = 0;
+			}
+			if(!Parsed) {
+				if(ErrorLogger) ErrorLogger(ErrorLogger_Userdata, "ERROR: Unknown LFO shape option (-lfoshape:%s).\n", ShpStr);
+			} else {
+				       if(OPT_MATCH_ARG("+")) {
+					Options->ToneLFOShape += 5;
+				} else if(OPT_MATCH_ARG("_")) {
+					Options->ToneLFOShape += 10;
+				}
 			}
 		} else {
 			Parsed = 0;

@@ -18,6 +18,14 @@ static void WaveformOptionsErrorLogger(void *Userdata, const char *Format, ...) 
 	va_end(vl);
 }
 
+static void InstrumentOptionsErrorLogger(void *Userdata, const char *Format, ...) {
+	const struct DLS_Instrument_t *SrcInst = (const struct DLS_Instrument_t*)Userdata;
+	va_list vl; va_start(vl, Format);
+	printf("\nWhile parsing instrument `%s`:\n ", SrcInst->Name);
+	vprintf(Format, vl);
+	va_end(vl);
+}
+
 /************************************************/
 
 //! Adjust root key so that tuning is always a positive value,
@@ -52,7 +60,7 @@ static uint8_t FixWaveformGain(double Gain) {
 
 //! Convert seconds into companded format
 static uint8_t ConvertSecondsToTimeFormat(double x, double MaxSeconds) {
-	return lrint(sqrt(fmin(fmax(x, 0.0), MaxSeconds) * 1626));
+	return (uint8_t)fmin(lrint(sqrt(fmin(fmax(x, 0.0), MaxSeconds) * 1626)), 255.0);
 }
 
 /************************************************/
@@ -62,7 +70,8 @@ static void TranslateArticulation(
 	struct SGE_WavArt_t *NewArt,
 	const struct DLS_Articulation_t *Art,
 	const struct DLS_WaveformCtrl_t *wCtrl_Region,
-	const struct DLS_WaveformCtrl_t *wCtrl_Waveform
+	const struct DLS_WaveformCtrl_t *wCtrl_Waveform,
+	const struct SGE_gOptions_t *Options
 ) {
 	//! Volume must be made relative to waveform gain
 	{
@@ -85,15 +94,19 @@ static void TranslateArticulation(
 		double w1 = fabs(Art->LFO1ToPitch) + fabs(Art->LFO1ToGain);
 		double w2 = fabs(Art->LFO2ToPitch);
 		double InvWeight = w1 + w2; if(InvWeight != 0.0) InvWeight = 1.0 / InvWeight;
-		NewArt->LFOToKey = (int16_t)fmin(fmax(lrint((Art->LFO1ToPitch*w1 + Art->LFO2ToPitch*w2)*InvWeight * 256.0), (double)-0x7FFF), (double)+0x7FFF);
-		NewArt->LFOToVol = (uint8_t)fmin(fmax(lrint(Art->LFO1ToGain * 255.0), 0.0), 255.0);
-		NewArt->LFORate  = (uint8_t)fmin(fmax(lrint((Art->LFO1Freq*w1 + Art->LFO2Freq*w2)*InvWeight * 16.0), 0.0), 255.0);
-		NewArt->LFORamp  = 1;
-		NewArt->LFODelay = ConvertSecondsToTimeFormat((Art->LFO1Delay*w1 + Art->LFO2Delay*w2)*InvWeight, 9.9);
+
+		NewArt->LFODelay   = ConvertSecondsToTimeFormat((Art->LFO1Delay*w1 + Art->LFO2Delay*w2)*InvWeight, 40.0);
+		NewArt->LFORate    = (uint8_t)fmin(fmax(lrint((Art->LFO1Freq*w1 + Art->LFO2Freq*w2)*InvWeight * 16.0), 0.0), 255.0);
+		NewArt->LFOToKey   = (int16_t)fmin(fmax(lrint((Art->LFO1ToPitch*w1 + Art->LFO2ToPitch*w2)*InvWeight * 256.0), (double)-0x7FFF), (double)+0x7FFF);
+		NewArt->LFOToVol   = (uint8_t)fmin(fmax(lrint(Art->LFO1ToGain * 255.0), 0.0), 255.0);
+		NewArt->LFOShape   = Options->ToneLFOShape;
+		NewArt->LFOAmpRamp = (Options->ToneLFOAmpRamp ? 1 : 0);
+		NewArt->LFOFrqRamp = (Options->ToneLFOFreqRamp ? 1 : 0);
 	}
 
 	//! Set up everything else
 	NewArt->Pan      = (int8_t)lrint(Art->MasterPan * 126.0);
+	NewArt->EG1Shape = Options->ToneEG1ParabolicAttack ? 1 : 0;
 	NewArt->EG2ToKey = (int16_t)fmin(fmax(lrint(Art->EG2ToPitch * 256.0), -32768.0), +32767.0);
 	NewArt->EG1.Attack  = ConvertSecondsToTimeFormat(Art->EG1.A, 40.0);
 	NewArt->EG1.Hold    = ConvertSecondsToTimeFormat(Art->EG1.H, 40.0);
@@ -124,7 +137,11 @@ static int AppendWaveform(struct SGE_LocalDb_t *Db, const struct SGE_LocalWav_t 
 }
 
 //! Append instrument to database
-static int AppendInstrument(struct SGE_LocalDb_t *Db, const struct DLS_Instrument_t *Instrument) {
+static int AppendInstrument(
+	struct SGE_LocalDb_t *Db,
+	const struct DLS_Instrument_t *Instrument,
+	const struct SGE_gOptions_t *gOptions
+) {
 	//! Sanity-check the layer count
 	if(Instrument->nLayers > 255) return 0;
 
@@ -148,6 +165,11 @@ static int AppendInstrument(struct SGE_LocalDb_t *Db, const struct DLS_Instrumen
 		NewTone->nLayers = 0; //! <- Compatibility with LocalDb_Destroy()
 		return 0;
 	}
+
+	//! Translate options
+	struct SGE_gOptions_t Options;
+	memcpy(&Options, gOptions, sizeof(struct SGE_gOptions_t));
+	SGE_ParseOptions(&Options, (const char**)(&Instrument->Comment), 1, 1, InstrumentOptionsErrorLogger, (void*)Instrument, NULL, NULL);
 
 	//! Create layers
 	uint32_t LayerIdx;
@@ -173,7 +195,7 @@ static int AppendInstrument(struct SGE_LocalDb_t *Db, const struct DLS_Instrumen
 			NewRegion->KeyHi   = Region->KeyHi;
 			NewRegion->WaveIdx = Region->WaveformIdx;
 			NewRegion->Referenced = 0;
-			TranslateArticulation(&NewRegion->Art, &Region->Art, &Region->WavCtrl, &Region->Waveform->wCtrl);
+			TranslateArticulation(&NewRegion->Art, &Region->Art, &Region->WavCtrl, &Region->Waveform->wCtrl, &Options);
 
 			//! If the referenced waveform was part of a drum kit, mark as percussive
 			if(Instrument->DrumKit) Db->Waves[Region->WaveformIdx].IsPercussive = 1;
@@ -280,7 +302,7 @@ int SGE_LocalDb_SoundBankFromDLS(struct SGE_LocalDb_t *Db, FILE *DLSFile, const 
 	uint32_t InstrumentIdx;
 	for(InstrumentIdx=0;InstrumentIdx<DLS.nInstruments;InstrumentIdx++) {
 		const struct DLS_Instrument_t *SrcInstrument = &DLS.Instruments[InstrumentIdx];
-		if(!AppendInstrument(Db, SrcInstrument)) {
+		if(!AppendInstrument(Db, SrcInstrument, Options)) {
 			ReturnValue = DLS_ERROR_OUT_OF_MEMORY;
 			goto SoundBankFromDLS_Exit;
 		}

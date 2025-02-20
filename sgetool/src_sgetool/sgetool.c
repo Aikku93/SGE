@@ -147,6 +147,14 @@ static const char *HelpString =
 	"                      the effect to the output of the resampled signal, which\n"
 	"                      may contain silence in the higher frequencies when using\n"
 	"                      this option.\n"
+	"                      Note that oversampling will apply the low-pass cutoff at\n"
+	"                      either the original sample rate before oversampling, or\n"
+	"                      the explicit low-pass cutoff, whichever is lower.\n"
+	"                      Can be a ratio, semitones (eg. 1.0st), or cents (eg. 10c)\n"
+	" -transpose:0.0st   - Transpose waveform before any processing. This in effect\n"
+	"                      changes the waveform's sample rate, and adjusts the root\n"
+	"                      key (and fine-tuning) to compensate. By itself, this will\n"
+	"                      not do anything, but will affect resampling options.\n"
 	" -wavcull:y         - Cull unused waveforms. When compiling music, all tones in\n"
 	"                      use are scanned, and the waveforms they referenced become\n"
 	"                      marked as 'necessary'. When culling is enabled, waveforms\n"
@@ -212,6 +220,28 @@ static const char *HelpString =
 	"                      below the smallest representable level of a given format.\n"
 	"                      For example, a dither level of 1.0 for PCM8 adds noise at\n"
 	"                      an absolute amplitude of 1/256.\n"
+	" Tone Options\n"
+	" ------------\n"
+	" -eg1attack:linear  - Enable/disable a parabolic attack segment. This can sound\n"
+	"                      more natural, but is incompatible with most DAWs, so will\n"
+	"                      have a different attack character than may be expected.\n"
+	"                      Can be any of:\n"
+	"                      * linear\n"
+	"                      * parabolic\n"
+	" -lfoampramp:n      - Enable/disable ramping of the LFO amplitude during the\n"
+	"                      delay segment. This essentially converts the delay time\n"
+	"                      into a fade-in time.\n"
+	" -lfofreqramp:n     - Enable/disable ramping of the LFO frequency during the\n"
+	"                      delay segment. This essentially converts the delay time\n"
+	"                      into a fade-in time.\n"
+	" -lfoshape:sine     - Set the shape of the LFO generator. Can be any of:\n"
+	"                      * sine[+/_]\n"
+	"                      * tri[+/_] / triangle[+/_]\n"
+	"                      * saw[+/_] / sawtooth{+/_]\n"
+	"                      * square[+/_]\n"
+	"                      * noise[+/_]\n"
+	"                      Note that the signedness of the output only affects the\n"
+	"                      playback rate and NOT the volume (always negative).\n"
 ;
 
 /************************************************/
@@ -340,12 +370,17 @@ int main(int argc, const char *argv[]) {
 	Options.SRCHalfOrder          = (33-1) / 2;
 	Options.SRCWindow             = SGE_OPT_SRCWINDOW_HANN;
 	Options.UseGlobalToneBank     = 0;
+	Options.ToneEG1ParabolicAttack = 0;
+	Options.ToneLFOAmpRamp        = 0;
+	Options.ToneLFOFreqRamp       = 0;
+	Options.ToneLFOShape          = 0;
 	Options.WavMonoConvWindowSize = 256;
 	Options.WavMonoConvWindowType = SGE_OPT_MONOCONV_WINDOW_HANN;
 	Options.WavMonoConvHops       = 8;
 	Options.WavResampleRate       = 0;
 	Options.WavMinLoopSize        = 0;
 	Options.WavOversampleRate     = 1.0;
+	Options.WavTransposeRate      = 1.0;
 	Options.WavLowpassCutoff      = 0.0;
 	Options.WavHighShelfGain      = 1.0;
 	Options.WavGlobalGain         = 1.0;

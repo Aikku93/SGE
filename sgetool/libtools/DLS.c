@@ -345,6 +345,7 @@ void DLS_Destroy(struct DLS_t *DLS) {
 	//! Destroy all waveforms
 	for(i=0;i<DLS->nWaveforms;i++) {
 		free(DLS->Waveforms[i].Name);
+		free(DLS->Waveforms[i].Comment);
 	}
 	free(DLS->Waveforms);
 
@@ -354,6 +355,8 @@ void DLS_Destroy(struct DLS_t *DLS) {
 		struct DLS_Layer_t *Layers = Instrument->Layers;
 		for(j=0;j<Instrument->nLayers;j++) free(Layers[j].Regions);
 		free(Layers);
+		free(Instrument->Name);
+		free(Instrument->Comment);
 	}
 	free(DLS->Instruments);
 

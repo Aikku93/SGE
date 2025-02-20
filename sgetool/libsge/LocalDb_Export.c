@@ -408,7 +408,7 @@ int SGE_LocalDb_Export(struct SGE_LocalDb_t *Db, FILE *SGEFile, FILE *WavFile, c
 			//! unlikely that any waveform has such a sampling rate, but...
 			return SGE_LOCALDB_ERROR_NEED_RESAMPLING;
 		}
-		DstRate *= WavOpt->WavOversampleRate;
+		DstRate *= WavOpt->WavOversampleRate / WavOpt->WavTransposeRate;
 
 		//! Adjust the resampling rate based on loop size
 		uint32_t LoopRepeats = 1;

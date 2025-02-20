@@ -113,12 +113,17 @@ struct SGE_gOptions_t {
 	uint8_t  SRCHalfOrder;
 	uint8_t  SRCWindow;
 	uint8_t  UseGlobalToneBank;
+	uint8_t  ToneEG1ParabolicAttack;
+	uint8_t  ToneLFOAmpRamp;
+	uint8_t  ToneLFOFreqRamp;
+	uint8_t  ToneLFOShape;
 	uint16_t WavMonoConvWindowSize;
 	uint16_t WavMonoConvWindowType;
 	uint16_t WavMonoConvHops;
 	uint32_t WavResampleRate;
 	 int32_t WavMinLoopSize; //! Negative value = ms, Positive value = Samples
 	double   WavOversampleRate;
+	double   WavTransposeRate;
 	double   WavLowpassCutoff;
 	double   WavHighShelfGain;
 	double   WavGlobalGain;
@@ -212,6 +217,10 @@ int SGE_ReadDouble(double *Target, const char *Str, const char **StrEnd);
 //! Read gain in linear form, or dB form
 //! Returns 0 on failure, 1 on success.
 int SGE_ReadGain(double *Target, const char *Str, const char **StrEnd);
+
+//! Read relative key value as a ratio, semitones, or cents
+//! Returns 0 on failure, 1 on success.
+int SGE_ReadRelativeKey(double *Target, const char *Str, const char **StrEnd);
 
 /************************************************/
 

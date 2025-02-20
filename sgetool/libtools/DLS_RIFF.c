@@ -98,6 +98,8 @@ static struct DLS_Instrument_t *AppendInstrumentToDLS(struct DLS_t *DLS) {
 	Instrument->DrumKit = 0;
 	Instrument->nLayers = 0;
 	Instrument->Layers  = NULL;
+	Instrument->Name    = NULL;
+	Instrument->Comment = NULL;
 	Instrument->ArtLv   = 0;
 	WriteDefaultArticulation(&Instrument->Art);
 	return Instrument;
@@ -737,6 +739,28 @@ static int RIFF_DLS_LIST_lins_LIST_ins_insh(FILE *DLSFile, void *User, const str
 	return DLS_ERROR_NONE;
 }
 
+//! RIFF(DLS) -> LIST(lins) -> LIST(ins) -> LIST(INFO) -> INAM
+static int RIFF_DLS_LIST_lins_LIST_ins_LIST_INFO_INAM(FILE *DLSFile, void *User, const struct RIFF_CkHeader_t *Ck) {
+	struct DLS_t *DLS = (struct DLS_t*)User;
+	struct DLS_Instrument_t *Instrument = GetLastInstrument(DLS);
+	char *Name = (char*)malloc(Ck->Size * sizeof(char));
+	if(!Name) return DLS_ERROR_OUT_OF_MEMORY;
+	Instrument->Name = Name;
+	if(!fread(Name, Ck->Size, 1, DLSFile)) return DLS_ERROR_IO;
+	return DLS_ERROR_NONE;
+}
+
+//! RIFF(DLS) -> LIST(lins) -> LIST(ins) -> LIST(INFO) -> ICMT
+static int RIFF_DLS_LIST_lins_LIST_ins_LIST_INFO_ICMT(FILE *DLSFile, void *User, const struct RIFF_CkHeader_t *Ck) {
+	struct DLS_t *DLS = (struct DLS_t*)User;
+	struct DLS_Instrument_t *Instrument = GetLastInstrument(DLS);
+	char *Comment = (char*)malloc(Ck->Size * sizeof(char));
+	if(!Comment) return DLS_ERROR_OUT_OF_MEMORY;
+	Instrument->Comment = Comment;
+	if(!fread(Comment, Ck->Size, 1, DLSFile)) return DLS_ERROR_IO;
+	return DLS_ERROR_NONE;
+}
+
 //! RIFF(DLS) -> LIST(lins) -> LIST(ins) (end)
 static int RIFF_DLS_LIST_lins_LIST_ins_CbEnd(FILE *DLSFile, void *User) {
 	(void)DLSFile;
@@ -1003,8 +1027,28 @@ static const struct RIFF_CkHdl_t RIFF_DLS_LIST_lins_LIST_ins_LIST_lart_Ck[] = {
 	{0},
 };
 
+//! RIFF(DLS) -> LIST(lins) -> LIST(ins) -> LIST(INFO) -> Chunks
+static const struct RIFF_CkHdl_t RIFF_DLS_LIST_lins_LIST_ins_LIST_INFO_LIST[] = {
+	{
+		RIFF_FOURCC("INAM"),
+		RIFF_DLS_LIST_lins_LIST_ins_LIST_INFO_INAM,
+	},
+	{
+		RIFF_FOURCC("ICMT"),
+		RIFF_DLS_LIST_lins_LIST_ins_LIST_INFO_ICMT,
+	},
+	{0},
+};
+
 //! RIFF(DLS) -> LIST(lins) -> LIST(ins) -> LIST
 static const struct RIFF_CkListHdl_t RIFF_DLS_LIST_lins_LIST_ins_LIST[] = {
+	{
+		RIFF_FOURCC("INFO"),
+		RIFF_DLS_LIST_lins_LIST_ins_LIST_INFO_LIST,
+		NULL,
+		NULL,
+		NULL
+	},
 	{
 		RIFF_FOURCC("lrgn"),
 		NULL,

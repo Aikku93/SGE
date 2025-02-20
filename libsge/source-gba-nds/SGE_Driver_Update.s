@@ -755,8 +755,11 @@ ASM_MODE_THUMB
 .LMixer_VoxLoop_KeyOff:
 	MOV	r0, #SGE_VOX_STAT_EG_MSK << SGE_VOX_STAT_EG1_SHIFT
 	AND	r0, r6                    @ Reset EGs to 1.0 when they are in Hold (EG value is abused as a counter)
-#if SGE_USE_CURVED_ATTACK
 	BNE	0f
+	@MOV	r1, r9
+	LDRB	r0, [r1, #0x0A]           @ Check for curved attack
+	LSR	r0, #0x01
+	BCC	1f
 	LDRH	r0, [r4, #0x08]           @ EG1 Attack is on a curve, so apply it now
 	MOV	r1, r0
 	MUL	r1, r0
@@ -767,7 +770,6 @@ ASM_MODE_THUMB
 	SUB	r0, r1
 	STRH	r0, [r4, #0x08]
 	B	1f
-#endif
 0:	BIC	r6, r0                    @ Clear envelope phase
 	SUB	r0, #SGE_VOX_STAT_EG_HLD << SGE_VOX_STAT_EG1_SHIFT
 	BNE	1f
@@ -871,77 +873,73 @@ ASM_MODE_THUMB
 .LMixer_VoxLoop_UpdateLFO:
 	LDR	r0, [r4, #0x0C]           @ LFO | LFOFade<<16 -> r0
 #if !SGE_VARIABLE_SYNC_RATE
-	LDRB	r5, [r6, #0x05]           @ LFORate -> r5
-#endif
-	LDRB	r7, [r6, #0x04]           @ LFORamp | LFODelay<<1 -> r7
-#if !SGE_VARIABLE_SYNC_RATE
-	ADD	r5, #0x01                 @ <- Rate is biased by 1
-#endif
-#if SGE_VARIABLE_SYNC_RATE
-	LSR	r5, r7, #0x01
-	MOV	fp, r7
-	ADD	r7, sp, #0x08
+	LDRB	r5, [r6, #0x04]           @ LFODelay -> r5
+	LDR	r7, =SGE_EnvelopeLUT_Linear
+	LSL	r5, #0x01
+	LDRH	r5, [r7, r5]              @ FadeStep -> r5
+#else
+	LDRB	r5, [r6, #0x04]           @ LFODelay -> r5
+	ADD	r7, sp, #0x08             @ FadeStep -> r5
 	BL	.LMixer_VoxLoop_GetLinearStep_Core
-	MOV	r7, fp
-	MOV	fp, r5
-	LDRB	r5, [r6, #0x05]           @ LFORate -> r5
-	ADD	r5, #0x01
 #endif
+	LDRB	r7, [r6, #0x05]           @ LFORate -> r7
+	LSL	r5, #0x10                 @ PhaseStep -> upper 16 bits of r5
+	ADD	r7, #0x01                 @ <- Rate is biased by 1
 ASM_ALIGN(4)
 	BX	pc
 	NOP
 
 ASM_MODE_ARM
 .LMixer_VoxLoop_UpdateLFO_UpdateOscillator:
+	LDRB	fp, [r6, #0x09]           @ LFOShape|LFORamp -> fp
 #if !SGE_VARIABLE_SYNC_RATE
 	LDR	ip, =SGE_EnvelopeLUT_Linear
-	MOV	sl, r5, lsl #0x0A-4       @ PhaseStep = RateHz * (2^16 * AGB_FRAME_CYCLES / AGB_HW_FREQ_HZ) ~= (1 + 2^-4)(1 + 2^-7)*2^10
+	MOV	sl, r7, lsl #0x0A-4       @ PhaseStep = LFORateHz * (2^16 * AGB_FRAME_CYCLES / AGB_HW_FREQ_HZ) ~= (1 + 2^-4)(1 + 2^-7)*2^10
 	ADD	sl, sl, sl, lsr #0x04     @ For this level of precision, the NDS version has the same scaling constant
 	ADD	sl, sl, sl, lsr #0x07
-	BIC	fp, r7, #0x01
-	CMP	r7, fp                    @ Ramp bit set? (and set C=1)
 #else
 	ADD	sl, sp, #0x08             @ RateScale -> sl, RateHz | N<<16 -> ip
 	LDMIA	sl, {sl,ip}
 	MOV	ip, ip, lsr #0x10         @ PhaseStep = 2^16 * LFORateHz * N / SampRateHz
-	MUL	r5, ip, r5
-	UMULL	ip, sl, r5, sl
+	MUL	r7, ip, r7
+	UMULL	ip, sl, r7, sl
 	MOVS	ip, ip, lsr #(INVRATE_BITS+4-16)
 	ADC	sl, ip, sl, lsl #0x20-(INVRATE_BITS+4-16)
-	BIC	r5, r7, #0x01
-	CMP	r7, r5                    @ Ramp bit set? (and set C=1)
 #endif
-#if SGE_LFO_RAMP_FREQ
-	MOVNE	r5, r0, lsr #0x10         @  PhaseStep *= (Fade+1) (this ensures PhaseStep can be scaled by 1.0)
-	MLANE	sl, r5, sl, sl
-#endif
-#if !SGE_VARIABLE_SYNC_RATE
-	LDRH	fp, [ip, fp]              @ FadeStep -> fp
-#endif
-#if SGE_LFO_RAMP_FREQ
-	MOVNE	sl, sl, lsr #0x10
-#endif
-	CMNEQ	r0, #0x01<<16             @ !Ramp: Set PhaseStep=0 until Fade==1.0
+	CMP	r0, r0                    @ Set C=1
+	TST	fp, #0x10|0x20            @ Ramping at all?
+	CMNEQ	r0, #0x01<<16             @  N: Set PhaseStep=0 until LFOFade==1.0
 	BCC	.LMixer_VoxLoop_UpdateLFO_UpdateOscillator_Delay
-0:
-#if SGE_LFO_RAMP_AMP
-	ORR	sl, sl, r7, lsl #0x10     @ PhaseStep | Ramp<<16 -> sl
-#endif
-	MOV	r7, r0                    @ Cos -> r5, Sin -> r7 [1.16fxp]
-	BL	.LGetCosSin_ARM
-	MOVS	sl, sl, lsl #0x10         @ PhaseStep -> upper 16 bits of sl. C=Ramp?
-#if SGE_LFO_RAMP_AMP
-	BCC	0f
-	MOV	ip, r0, lsr #(16+16-14)   @ Sin *= Fade, Cos *= Fade
-	MLA	r5, ip, r5, r5
-	MLA	r7, ip, r7, r7
-	MOV	r5, r5, asr #0x0E
-	MOV	r7, r7, asr #0x0E
-#endif
-0:	RSB	r5, r5, #0x01<<16         @ 1-Cos -> r5 [1.17fxp]
+0:	TST	fp, #0x20                 @ LFOFrqRamp?
+	MOVNE	r7, r0, lsr #0x10         @  PhaseStep *= (LFOFade+1) (this ensures PhaseStep can be scaled by 1.0)
+	MLANE	sl, r7, sl, sl
+	MOVNE	sl, sl, lsr #0x10
+0:	AND	ip, fp, #0x0F             @ LFOShape -> ip
+	RSB	r7, ip, ip, lsl #0x04     @ LFOSign = LFOShape/5 = LFOShape*13/64 -> r7
+	SUB	r7, r7, ip, lsl #0x01
+	MOV	r7, r7, lsr #0x06
+	SUB	ip, ip, r7                @ LFOShape = LFOShape%5 -> ip
+	SUB	ip, ip, r7, lsl #0x02
+	LDR	pc, [pc, ip, lsl #0x02]   @ LFOKeyMod -> ip, LFOVolMod -> r9
+	NOP
+	.word .LMixer_VoxLoop_UpdateLFO_UpdateOscillator_Sine
+	.word .LMixer_VoxLoop_UpdateLFO_UpdateOscillator_Tri
+	.word .LMixer_VoxLoop_UpdateLFO_UpdateOscillator_Saw
+	.word .LMixer_VoxLoop_UpdateLFO_UpdateOscillator_Square
+	.word .LMixer_VoxLoop_UpdateLFO_UpdateOscillator_Noise
+.LMixer_VoxLoop_UpdateLFO_UpdateOscillator_ApplySign:
+	TST	fp, #0x10                 @ LFOAmpRamp?
+	MOVNE	lr, r0, lsr #(16+16-15)   @  Y: LFOKeyMod *= LFOFade, LFOVolMod *= LFOFade
+	MLANE	ip, lr, ip, ip            @     Only use the upper 15bits of LFOFade or we may overflow
+	MLANE	r9, lr, r9, r9
+	MOVNE	ip, ip, asr #0x0F
+	MOVNE	r9, r9, lsr #0x0F
+	CMP	r7, #0x01                 @ Check sign mode (0: +/-, 1: +, 2: -)
+	ANDCS	ip, ip, ip, asr #0x1F     @  +/-: LFOKeyMod = Min[0,LFOKeyMod] (only the negative values)
+	RSBEQ	ip, ip, #0x00             @  +: LFOKeyMod = -LFOKeyMod (always positive now)
+0:	MOV	sl, sl, lsl #0x10         @ PhaseStep -> upper 16 bits of sl
 	ADD	r0, sl, r0, ror #0x10     @ Phase += PhaseStep
-	MOV	fp, fp, lsl #0x10         @ Fade += FadeStep?
-	ADDS	r0, fp, r0, ror #0x10
+	ADDS	r0, r5, r0, ror #0x10     @ Fade += FadeStep?
 0:	ORRCS	r0, r0, #0x00FF<<16       @  Clip on overflow
 	ORRCS	r0, r0, #0xFF00<<16
 #if (!defined(__NDS__) || __NDS__ != 9)
@@ -951,9 +949,9 @@ ASM_MODE_ARM
 	BLX	.LMixer_VoxLoop_UpdateLFO_Finish
 #endif
 .LMixer_VoxLoop_UpdateLFO_UpdateOscillator_Delay:
-	MOV	r5, #0x00                 @ Force values for Phase=0
+	ADDS	r0, r0, r5                @ Fade += FadeStep?
+	MOV	ip, #0x00                 @ Force values for Phase=0
 	MOV	r7, #0x00
-	ADDS	r0, r0, fp, lsl #0x10     @ Fade += FadeStep?
 	B	0b
 
 ASM_MODE_THUMB
@@ -961,13 +959,15 @@ ASM_MODE_THUMB
 	STR	r0, [r4, #0x0C]           @ Store LFO
 	MOV	r0, #0x06
 	LDRSH	r0, [r6, r0]              @ LFOToKey -> r0
-	MUL	r0, r7                    @ Key += Sin*LFOToKey [1.16 + 8.8 = 8.24fxp]
+	MOV	r5, r9                    @ LFOVolMod -> r5
+	MOV	r7, ip                    @ LFOKeyMod -> r7
+	MUL	r0, r7                    @ Key += LFOKeyMod*LFOToKey [1.14 + 8.8 = 8.22fxp]
 	LDRB	r7, [r6, #0x08]           @ LFOToVol -> r7
-	ASR	r0, #(24-8)
+	ASR	r0, #(22-8)               @ Key -> 8.8fxp
 	ADC	r1, r0
-	MUL	r7, r5                    @ VolMod = LFOToVol*(1-Cos) -> r7 [.8 + 1.17 = .25fxp]
+	MUL	r7, r5                    @ VolMod = LFOToVol*LFOVolMod -> r7 [.8 + 1.14 = .22fxp]
 	LSR	r5, r2, #(31-16)          @ Vol in 1.16fxp -> r5
-	LSR	r7, #(25-15)              @ VolMod -> .15fxp
+	LSR	r7, #(22-15)              @ VolMod -> .15fxp
 	MUL	r7, r5                    @ dVol = Vol*VolMod -> r7 [1.16 + .15fxp = .31fxp]
 	SUB	r2, r7                    @ Vol -= dVol
 
@@ -1006,15 +1006,27 @@ ASM_MODE_THUMB
 	CMP	r3, #0xFC                 @ Clamp Pan to 00h..FCh
 	BCC	0f
 	MOV	r3, #0xFC
-0:	LSL	r3, #0x07                 @ Pan *= 10000h / FCh
-	LSR	r7, r3, #0x06             @ x*10000h/FCh / 4 ~= (1 + 2^-6)(1 + 2^-12)*2^6
-	ADD	r3, r7                    @ We scale by 2^7, and then round off to get better precision
-	LSR	r7, r3, #0x0C             @ We need to divide by 4 to scale by Pi/2, because CosSin uses z = x*2Pi
-	ADD	r3, r7
-	ADD	r3, #0x01
-	LSR	r7, r3, #0x01
-	BL	.LGetCosSin               @ Get volume pan adjustments: PanL = Cos[(Pan+1.0)/2.0 * Pi/2], PanR = Sin[(Pan+1.0)/2.0 * Pi/2]
-	LSR	r2, #(31-15)              @ Vol -> 1.15fxp
+ASM_ALIGN(4)
+0:	BX	pc                        @ PanL = Cos[(Pan+1.0)/2.0 * Pi/2] -> r5, PanR = Sin[(Pan+1.0)/2.0 * Pi/2] -> r7
+	NOP
+ASM_MODE_ARM
+	RSB	r5, r3, #0xFC             @ Flip for cosine -> r5
+	MUL	ip, r3, r3                @ zs^2 -> ip
+	MUL	lr, r5, r5                @ zc^2 -> lr
+	MOV	r7, #0x0180               @ a -> r7 (need to add 1/8 later)
+	SUB	ip, r7, ip, lsr #0x09     @ a + b*zs^2 -> ip
+	SUB	lr, r7, lr, lsr #0x09     @ a + b*zc^2 -> lr
+	MUL	r7, ip, r3                @ zs*(a+b*zs^2) -> r7
+	MUL	ip, lr, r5                @ zc*(a+b*zc^2) -> ip
+	ADD	r7, r7, r3, lsr #0x04     @ Add 9/128 factor to a to get exact 1.0 as needed
+	ADD	r7, r7, r3, lsr #0x07
+	ADD	ip, ip, r5, lsr #0x04
+	ADD	r5, ip, r5, lsr #0x07
+	ADR	ip, .LMixer_VoxLoop_ApplyPan_Finish+1
+	BX	ip
+ASM_MODE_THUMB
+.LMixer_VoxLoop_ApplyPan_Finish:
+0:	LSR	r2, #(31-15)              @ Vol -> 1.15fxp
 	MUL	r7, r2                    @ VolR -> r7 [1.15 + 1.16 = 1.31fxp]
 	MUL	r2, r5                    @ VolL -> r2
 	LSR	r3, r7, #(31-15)          @ VolR -> 1.15fxp -> r3
@@ -1441,6 +1453,239 @@ ASM_MODE_ARM
 #endif
 
 /************************************************/
+.pool
+/************************************************/
+
+.macro EG_GetLinearStep
+#if SGE_VARIABLE_SYNC_RATE
+	BL	.LMixer_VoxLoop_GetLinearStep
+#else
+	LDR	r7, =SGE_EnvelopeLUT_Linear
+	LSL	r5, #0x01
+	LDRH	r5, [r7, r5]
+#endif
+.endm
+
+.macro EG_GetExpDecStep
+#if SGE_VARIABLE_SYNC_RATE
+	BL	.LMixer_VoxLoop_GetExpDecStep
+#else
+	LDR	r7, =SGE_EnvelopeLUT_ExpDec
+	LSL	r5, #0x01
+	LDRH	r5, [r7, r5]
+#endif
+.endm
+
+/************************************************/
+
+@ r0:  EG
+@ r1:  Bnd
+@ r2:  Vol
+@ r3:  Pan
+@ r4: &Art
+@ r5:
+@ r6:  Stat | xxx<<8
+@ r7:
+@ Updates EG and Stat, destroys r5,r7
+
+ASM_MODE_THUMB
+
+.LMixer_VoxLoop_UpdateEG1_Attack:
+	LDRB	r5, [r4, #0x0E+0*5+0]     @ EG1c -> r5
+	EG_GetLinearStep
+	ADD	r0, r5                    @ EG1 += EG1c?
+	LSR	r7, r0, #0x10
+	BNE	.LMixer_VoxLoop_UpdateEG1_Attack_Done
+	LDRB	r7, [r4, #0x0A]           @ EG1Flags -> r5
+	ADD	r5, r0                    @ NextEG1 = EG1+EG1c
+	LSR	r5, #0x10-1               @ NextEG1 >= 1.5? Snap to next phase
+	CMP	r5, #0x03
+	BCS	.LMixer_VoxLoop_UpdateEG1_Attack_Done
+	LSR	r7, #0x01                 @ Parabolic attack?
+	BCS	2f
+1:	ADD	r5, r0, #0x01             @  N: Vol *= EG1
+	B	0f
+2:	MOV	r7, r0                    @  Y: Vol *= 1-(1-EG1)^2 [1.7 + 1.16 = 1.23fxp]
+	MUL	r7, r7                    @     Note: 1-(1-x)^2 = 2*x - x^2
+	LSL	r5, r0, #0x01
+	LSR	r7, #0x10
+	SUB	r5, r7
+0:	MUL	r2, r5                    @ Vol *= EG1
+#if SGE_USE_VOLSUBDIV
+	STR	r5, [sp, #USEDEG1_SP_OFFS]
+#endif
+	B	.LMixer_VoxLoop_UpdateEG1_Done
+
+.LMixer_VoxLoop_UpdateEG1_Attack_Done:
+	LSL	r2, #0x10                 @ Assume EG1 = 1.0 now and move to Hold/Decay
+#if SGE_USE_VOLSUBDIV
+	MOV	r5, #0x01
+	LSL	r5, #0x10
+	STR	r5, [sp, #USEDEG1_SP_OFFS]
+#endif
+	LDRB	r5, [r4, #0x0E+0*5+1]     @ Hold time?
+	ADD	r6, #0x01 << SGE_VOX_STAT_EG1_SHIFT
+	CMP	r5, #0x00
+	BEQ	.LMixer_VoxLoop_UpdateEG1_Hold_Done
+0:	MOV	r0, #0x01                 @ Force EG1 = 0.0+eps for Hold (must not be 0)
+	B	.LMixer_VoxLoop_UpdateEG1_Done
+
+.LMixer_VoxLoop_UpdateEG1_Hold:
+	LDRB	r5, [r4, #0x0E+0*5+1]     @ EG1c -> r5
+	EG_GetLinearStep
+	ADD	r0, r5                    @ EG1 += EG1c?
+	LSR	r7, r0, #0x10
+	BNE	.LMixer_VoxLoop_UpdateEG1_Hold_Done
+	ADD	r5, r0                    @ NextEG1 = EG1+EG1c
+	LSR	r5, #0x10-1               @ NextEG1 >= 1.5? Snap to next phase
+	CMP	r5, #0x03
+	BCS	.LMixer_VoxLoop_UpdateEG1_Hold_Done
+	B	.LMixer_VoxLoop_UpdateEG1_Done
+
+.LMixer_VoxLoop_UpdateEG1_Hold_Done:
+	MVN	r0, r5                    @ Reset EG1 = 1.0
+	LDRB	r5, [r4, #0x0E+0*5+2]     @ Decay time?
+	LSR	r0, #0x10
+	ADD	r6, #0x01 << SGE_VOX_STAT_EG1_SHIFT
+	CMP	r5, #0x00
+	BEQ	.LMixer_VoxLoop_UpdateEG1_Decay_Done
+	B	.LMixer_VoxLoop_UpdateEG1_Done
+
+.LMixer_VoxLoop_UpdateEG1_Decay:
+	LDRB	r5, [r4, #0x0E+0*5+2]     @ EG1c -> r5
+	EG_GetExpDecStep
+	LDRB	r7, [r4, #0x0E+0*5+3]     @ Sustain -> r7
+	MUL	r5, r0                    @ EG1 *= EG1c
+	LSL	r0, r7, #0x08
+	ADD	r7, r0
+	LSR	r0, r5, #0x10
+	CMP	r0, r7                    @ EG1 < Sustain?
+	BCC	.LMixer_VoxLoop_UpdateEG1_Decay_Done
+	B	.LMixer_VoxLoop_UpdateEG1_Done
+
+.LMixer_VoxLoop_UpdateEG1_Decay_Done:
+	LDRB	r0, [r4, #0x0E+0*5+3]     @ Force EG1 = Sustain
+	ADD	r6, #0x01 << SGE_VOX_STAT_EG1_SHIFT
+	LSL	r5, r0, #0x08
+	ADD	r0, r5
+	B	.LMixer_VoxLoop_UpdateEG1_Done
+/*
+.LMixer_VoxLoop_UpdateEG1_Sustain:
+	B	.LMixer_VoxLoop_UpdateEG1_Done
+*/
+.LMixer_VoxLoop_UpdateEG1_Release:
+	LDRB	r5, [r4, #0x0E+0*5+4]     @ EG1c -> r5
+	EG_GetExpDecStep
+#if (!defined(SGE_PLATFORM_HAVE_REVERB) && defined(SGE_PLATFORM_HAVE_FAKE_REVERB))
+	MOV	ip, r5                    @ EG1c -> ip
+	LDR	r7, [sp, #0x10]           @ Driver -> r5
+	LDRH	r5, [r7, #0x16]           @ ReverbDecay -> r5
+	LDRH	r7, [r7, #0x14]           @ ReverbFb -> r7
+	CMP	r5, ip                    @ If ReverbDecay is faster than EG1c, use EG1c to silence
+	BLS	2f
+	CMP	r0, r7                    @ EG1 <= Fb: Use ReverbDecay
+	BLS	3f
+1:	MOV	r5, ip                    @ EG1 > Fb: Use EG1c and clip to ReverbFb
+	MUL	r5, r0
+	LDR	r7, [sp, #0x10]           @ Driver -> r7
+	LSR	r0, r5, #0x10
+	LDRH	r5, [r7, #0x14]           @ ReverbFb -> r5
+	CMP	r0, r5                    @ If EG1 fell below ReverbFb, clip to ReverbFb
+	BHI	0f
+	MOV	r0, r5
+0:	B	.LMixer_VoxLoop_UpdateEG1_Done
+2:	MOV	r5, ip                    @ Restore EG1c -> r5 and apply to EG1
+3:
+#endif
+	MUL	r5, r0
+	LSR	r0, r5, #0x10
+	B	.LMixer_VoxLoop_UpdateEG1_Done
+
+/************************************************/
+
+ASM_MODE_THUMB
+
+.LMixer_VoxLoop_UpdateEG2_Attack:
+	LDRB	r5, [r4, #0x0E+1*5+0]     @ EG2c -> r5
+	EG_GetLinearStep
+	ADD	r0, r5                    @ EG2 += EG2c?
+	LSR	r7, r0, #0x10
+	BNE	.LMixer_VoxLoop_UpdateEG2_Attack_Done
+	ADD	r5, r0                    @ NextEG2 = EG2+EG2c
+	LSR	r5, #0x10-1               @ NextEG2 >= 1.5? Snap to next phase
+	CMP	r5, #0x03
+	BCS	.LMixer_VoxLoop_UpdateEG2_Attack_Done
+	B	.LMixer_VoxLoop_UpdateEG2_Done
+
+.LMixer_VoxLoop_UpdateEG2_Attack_Done:
+	LDRB	r5, [r4, #0x0E+1*5+1]     @ Hold time?
+	ADD	r6, #0x01 << SGE_VOX_STAT_EG2_SHIFT
+	CMP	r5, #0x00
+	BEQ	.LMixer_VoxLoop_UpdateEG2_Hold_Done
+0:	MOV	r0, #0x01                 @ Force EG2 = 0.0+eps for Hold
+	B	.LMixer_VoxLoop_UpdateEG2_Done
+
+.LMixer_VoxLoop_UpdateEG2_Hold:
+	LDRB	r5, [r4, #0x0E+1*5+1]     @ EG2c -> r5
+	EG_GetLinearStep
+	ADD	r0, r5                    @ EG2 += EG2c?
+	LSR	r7, r0, #0x10
+	BNE	.LMixer_VoxLoop_UpdateEG2_Hold_Done
+	ADD	r5, r0                    @ NextEG2 = EG2+EG2c
+	LSR	r5, #0x10-1               @ NextEG2 >= 1.5? Snap to next phase
+	CMP	r5, #0x03
+	BCS	.LMixer_VoxLoop_UpdateEG2_Hold_Done
+	B	.LMixer_VoxLoop_UpdateEG2_Done
+
+.LMixer_VoxLoop_UpdateEG2_Hold_Done:
+	MVN	r0, r5                    @ Reset EG2 = 1.0
+	LDRB	r5, [r4, #0x0E+1*5+2]     @ Decay time?
+	LSR	r0, #0x10
+	ADD	r6, #0x01 << SGE_VOX_STAT_EG2_SHIFT
+	CMP	r5, #0x00
+	BEQ	.LMixer_VoxLoop_UpdateEG2_Decay_Done
+	B	.LMixer_VoxLoop_UpdateEG2_Done
+
+.LMixer_VoxLoop_UpdateEG2_Decay:
+	LDRB	r5, [r4, #0x0E+1*5+2]     @ EG2c -> r5
+	EG_GetLinearStep
+	LDRB	r7, [r4, #0x0E+1*5+3]     @ Sustain -> r7
+	SUB	r0, r5                    @ EG2 -= EG2c
+	LSL	r5, r7, #0x08
+	ADD	r7, r5
+	CMP	r0, r7                    @ EG2 < Sustain? (NOTE: Use signed comparison to avoid having to clip)
+	BLT	.LMixer_VoxLoop_UpdateEG2_Decay_Done
+	B	.LMixer_VoxLoop_UpdateEG2_Done
+
+.LMixer_VoxLoop_UpdateEG2_Decay_Done:
+	LDRB	r0, [r4, #0x0E+1*5+3]     @ Force EG2 = Sustain
+	ADD	r6, #0x01 << SGE_VOX_STAT_EG2_SHIFT
+	LSL	r5, r0, #0x08
+	ADD	r0, r5
+	B	.LMixer_VoxLoop_UpdateEG2_Done
+/*
+.LMixer_VoxLoop_UpdateEG2_Sustain:
+	B	.LMixer_VoxLoop_UpdateEG2_Done
+*/
+.LMixer_VoxLoop_UpdateEG2_Release:
+#if (!defined(SGE_PLATFORM_HAVE_REVERB) && defined(SGE_PLATFORM_HAVE_FAKE_REVERB))
+	LDR	r5, [sp, #0x10]           @ Driver -> r5
+	LDR	r7, [sp, #0x00]           @ Vox -> r7
+	LDRH	r5, [r5, #0x14]           @ ReverbFb -> r5
+	LDRH	r7, [r7, #0x08]           @ EG1 -> r7
+	CMP	r7, r5                    @ EG1 <= ReverbFb: Stop release
+	BLS	1f
+#endif
+	LDRB	r5, [r4, #0x0E+1*5+4]     @ EG2c -> r5
+	EG_GetLinearStep
+	SUB	r0, r5                    @ EG2 -= EG2c
+	ASR	r5, r0, #0x1F             @ EG2 = MAX(0, EG2)
+	BIC	r0, r5
+1:	B	.LMixer_VoxLoop_UpdateEG2_Done
+
+/************************************************/
+.pool
+/************************************************/
 
 @ r0:  MxCnt
 @ r1:
@@ -1457,6 +1702,8 @@ ASM_MODE_ARM
 @ ip:  Wav.Frmt
 @ lr:  Wav.Chan
 @ sp+00h: &Vox
+
+ASM_MODE_ARM
 
 .LMixer_VoxLoop_MixLoop_HandleLoop:
 	LDMIB	r8, {r2-r3}               @ Size = Wav.Size -> r2, LoopSize = Wav.Loop -> r3?
@@ -1657,236 +1904,6 @@ ASM_MODE_ARM
 .pool
 /************************************************/
 
-.macro EG_GetLinearStep
-#if SGE_VARIABLE_SYNC_RATE
-	BL	.LMixer_VoxLoop_GetLinearStep
-#else
-	LDR	r7, =SGE_EnvelopeLUT_Linear
-	LSL	r5, #0x01
-	LDRH	r5, [r7, r5]
-#endif
-.endm
-
-.macro EG_GetExpDecStep
-#if SGE_VARIABLE_SYNC_RATE
-	BL	.LMixer_VoxLoop_GetExpDecStep
-#else
-	LDR	r7, =SGE_EnvelopeLUT_ExpDec
-	LSL	r5, #0x01
-	LDRH	r5, [r7, r5]
-#endif
-.endm
-
-/************************************************/
-
-@ r0:  EG
-@ r1:  Bnd
-@ r2:  Vol
-@ r3:  Pan
-@ r4: &Art
-@ r5:
-@ r6:  Stat | xxx<<8
-@ r7:
-@ Updates EG and Stat, destroys r5,r7
-
-ASM_MODE_THUMB
-
-.LMixer_VoxLoop_UpdateEG1_Attack:
-	LDRB	r5, [r4, #0x0E+0*5+0]     @ EG1c -> r5
-	EG_GetLinearStep
-	ADD	r0, r5                    @ EG1 += EG1c?
-	LSR	r7, r0, #0x10
-	BNE	.LMixer_VoxLoop_UpdateEG1_Attack_Done
-	ADD	r5, r0                    @ NextEG1 = EG1+EG1c
-	LSR	r5, #0x10-1               @ NextEG1 >= 1.5? Snap to next phase
-	CMP	r5, #0x03
-	BCS	.LMixer_VoxLoop_UpdateEG1_Attack_Done
-#if SGE_USE_CURVED_ATTACK
-	MOV	r7, r0                    @ Vol *= 1-(1-EG1)^2 [1.7 + 1.16 = 1.23fxp]
-	MUL	r7, r7                    @ 1-(1-x)^2 = 2*x - x^2
-	LSL	r5, r0, #0x01
-	LSR	r7, #0x10
-	SUB	r5, r7
-#else
-	ADD	r5, r0, #0x01
-#endif
-	MUL	r2, r5                    @ Vol *= EG1
-#if SGE_USE_VOLSUBDIV
-	STR	r5, [sp, #USEDEG1_SP_OFFS]
-#endif
-	B	.LMixer_VoxLoop_UpdateEG1_Done
-
-.LMixer_VoxLoop_UpdateEG1_Attack_Done:
-	LSL	r2, #0x10                 @ Assume EG1 = 1.0 now and move to Hold/Decay
-#if SGE_USE_VOLSUBDIV
-	MOV	r5, #0x01
-	LSL	r5, #0x10
-	STR	r5, [sp, #USEDEG1_SP_OFFS]
-#endif
-	LDRB	r5, [r4, #0x0E+0*5+1]     @ Hold time?
-	ADD	r6, #0x01 << SGE_VOX_STAT_EG1_SHIFT
-	CMP	r5, #0x00
-	BEQ	.LMixer_VoxLoop_UpdateEG1_Hold_Done
-0:	MOV	r0, #0x01                 @ Force EG1 = 0.0+eps for Hold (must not be 0)
-	B	.LMixer_VoxLoop_UpdateEG1_Done
-
-.LMixer_VoxLoop_UpdateEG1_Hold:
-	LDRB	r5, [r4, #0x0E+0*5+1]     @ EG1c -> r5
-	EG_GetLinearStep
-	ADD	r0, r5                    @ EG1 += EG1c?
-	LSR	r7, r0, #0x10
-	BNE	.LMixer_VoxLoop_UpdateEG1_Hold_Done
-	ADD	r5, r0                    @ NextEG1 = EG1+EG1c
-	LSR	r5, #0x10-1               @ NextEG1 >= 1.5? Snap to next phase
-	CMP	r5, #0x03
-	BCS	.LMixer_VoxLoop_UpdateEG1_Hold_Done
-	B	.LMixer_VoxLoop_UpdateEG1_Done
-
-.LMixer_VoxLoop_UpdateEG1_Hold_Done:
-	MVN	r0, r5                    @ Reset EG1 = 1.0
-	LDRB	r5, [r4, #0x0E+0*5+2]     @ Decay time?
-	LSR	r0, #0x10
-	ADD	r6, #0x01 << SGE_VOX_STAT_EG1_SHIFT
-	CMP	r5, #0x00
-	BEQ	.LMixer_VoxLoop_UpdateEG1_Decay_Done
-	B	.LMixer_VoxLoop_UpdateEG1_Done
-
-.LMixer_VoxLoop_UpdateEG1_Decay:
-	LDRB	r5, [r4, #0x0E+0*5+2]     @ EG1c -> r5
-	EG_GetExpDecStep
-	LDRB	r7, [r4, #0x0E+0*5+3]     @ Sustain -> r7
-	MUL	r5, r0                    @ EG1 *= EG1c
-	LSL	r0, r7, #0x08
-	ADD	r7, r0
-	LSR	r0, r5, #0x10
-	CMP	r0, r7                    @ EG1 < Sustain?
-	BCC	.LMixer_VoxLoop_UpdateEG1_Decay_Done
-	B	.LMixer_VoxLoop_UpdateEG1_Done
-
-.LMixer_VoxLoop_UpdateEG1_Decay_Done:
-	LDRB	r0, [r4, #0x0E+0*5+3]     @ Force EG1 = Sustain
-	ADD	r6, #0x01 << SGE_VOX_STAT_EG1_SHIFT
-	LSL	r5, r0, #0x08
-	ADD	r0, r5
-	B	.LMixer_VoxLoop_UpdateEG1_Done
-/*
-.LMixer_VoxLoop_UpdateEG1_Sustain:
-	B	.LMixer_VoxLoop_UpdateEG1_Done
-*/
-.LMixer_VoxLoop_UpdateEG1_Release:
-	LDRB	r5, [r4, #0x0E+0*5+4]     @ EG1c -> r5
-	EG_GetExpDecStep
-#if (!defined(SGE_PLATFORM_HAVE_REVERB) && defined(SGE_PLATFORM_HAVE_FAKE_REVERB))
-	MOV	ip, r5                    @ EG1c -> ip
-	LDR	r7, [sp, #0x10]           @ Driver -> r5
-	LDRH	r5, [r7, #0x16]           @ ReverbDecay -> r5
-	LDRH	r7, [r7, #0x14]           @ ReverbFb -> r7
-	CMP	r5, ip                    @ If ReverbDecay is faster than EG1c, use EG1c to silence
-	BLS	2f
-	CMP	r0, r7                    @ EG1 <= Fb: Use ReverbDecay
-	BLS	3f
-1:	MOV	r5, ip                    @ EG1 > Fb: Use EG1c and clip to ReverbFb
-	MUL	r5, r0
-	LDR	r7, [sp, #0x10]           @ Driver -> r7
-	LSR	r0, r5, #0x10
-	LDRH	r5, [r7, #0x14]           @ ReverbFb -> r5
-	CMP	r0, r5                    @ If EG1 fell below ReverbFb, clip to ReverbFb
-	BHI	0f
-	MOV	r0, r5
-0:	B	.LMixer_VoxLoop_UpdateEG1_Done
-2:	MOV	r5, ip                    @ Restore EG1c -> r5 and apply to EG1
-3:
-#endif
-	MUL	r5, r0
-	LSR	r0, r5, #0x10
-	B	.LMixer_VoxLoop_UpdateEG1_Done
-
-/************************************************/
-
-ASM_MODE_THUMB
-
-.LMixer_VoxLoop_UpdateEG2_Attack:
-	LDRB	r5, [r4, #0x0E+1*5+0]     @ EG2c -> r5
-	EG_GetLinearStep
-	ADD	r0, r5                    @ EG2 += EG2c?
-	LSR	r7, r0, #0x10
-	BNE	.LMixer_VoxLoop_UpdateEG2_Attack_Done
-	ADD	r5, r0                    @ NextEG2 = EG2+EG2c
-	LSR	r5, #0x10-1               @ NextEG2 >= 1.5? Snap to next phase
-	CMP	r5, #0x03
-	BCS	.LMixer_VoxLoop_UpdateEG2_Attack_Done
-	B	.LMixer_VoxLoop_UpdateEG2_Done
-
-.LMixer_VoxLoop_UpdateEG2_Attack_Done:
-	LDRB	r5, [r4, #0x0E+1*5+1]     @ Hold time?
-	ADD	r6, #0x01 << SGE_VOX_STAT_EG2_SHIFT
-	CMP	r5, #0x00
-	BEQ	.LMixer_VoxLoop_UpdateEG2_Hold_Done
-0:	MOV	r0, #0x01                 @ Force EG2 = 0.0+eps for Hold
-	B	.LMixer_VoxLoop_UpdateEG2_Done
-
-.LMixer_VoxLoop_UpdateEG2_Hold:
-	LDRB	r5, [r4, #0x0E+1*5+1]     @ EG2c -> r5
-	EG_GetLinearStep
-	ADD	r0, r5                    @ EG2 += EG2c?
-	LSR	r7, r0, #0x10
-	BNE	.LMixer_VoxLoop_UpdateEG2_Hold_Done
-	ADD	r5, r0                    @ NextEG2 = EG2+EG2c
-	LSR	r5, #0x10-1               @ NextEG2 >= 1.5? Snap to next phase
-	CMP	r5, #0x03
-	BCS	.LMixer_VoxLoop_UpdateEG2_Hold_Done
-	B	.LMixer_VoxLoop_UpdateEG2_Done
-
-.LMixer_VoxLoop_UpdateEG2_Hold_Done:
-	MVN	r0, r5                    @ Reset EG2 = 1.0
-	LDRB	r5, [r4, #0x0E+1*5+2]     @ Decay time?
-	LSR	r0, #0x10
-	ADD	r6, #0x01 << SGE_VOX_STAT_EG2_SHIFT
-	CMP	r5, #0x00
-	BEQ	.LMixer_VoxLoop_UpdateEG2_Decay_Done
-	B	.LMixer_VoxLoop_UpdateEG2_Done
-
-.LMixer_VoxLoop_UpdateEG2_Decay:
-	LDRB	r5, [r4, #0x0E+1*5+2]     @ EG2c -> r5
-	EG_GetLinearStep
-	LDRB	r7, [r4, #0x0E+1*5+3]     @ Sustain -> r7
-	SUB	r0, r5                    @ EG2 -= EG2c
-	LSL	r5, r7, #0x08
-	ADD	r7, r5
-	CMP	r0, r7                    @ EG2 < Sustain? (NOTE: Use signed comparison to avoid having to clip)
-	BLT	.LMixer_VoxLoop_UpdateEG2_Decay_Done
-	B	.LMixer_VoxLoop_UpdateEG2_Done
-
-.LMixer_VoxLoop_UpdateEG2_Decay_Done:
-	LDRB	r0, [r4, #0x0E+1*5+3]     @ Force EG2 = Sustain
-	ADD	r6, #0x01 << SGE_VOX_STAT_EG2_SHIFT
-	LSL	r5, r0, #0x08
-	ADD	r0, r5
-	B	.LMixer_VoxLoop_UpdateEG2_Done
-/*
-.LMixer_VoxLoop_UpdateEG2_Sustain:
-	B	.LMixer_VoxLoop_UpdateEG2_Done
-*/
-.LMixer_VoxLoop_UpdateEG2_Release:
-#if (!defined(SGE_PLATFORM_HAVE_REVERB) && defined(SGE_PLATFORM_HAVE_FAKE_REVERB))
-	LDR	r5, [sp, #0x10]           @ Driver -> r5
-	LDR	r7, [sp, #0x00]           @ Vox -> r7
-	LDRH	r5, [r5, #0x14]           @ ReverbFb -> r5
-	LDRH	r7, [r7, #0x08]           @ EG1 -> r7
-	CMP	r7, r5                    @ EG1 <= ReverbFb: Stop release
-	BLS	1f
-#endif
-	LDRB	r5, [r4, #0x0E+1*5+4]     @ EG2c -> r5
-	EG_GetLinearStep
-	SUB	r0, r5                    @ EG2 -= EG2c
-	ASR	r5, r0, #0x1F             @ EG2 = MAX(0, EG2)
-	BIC	r0, r5
-1:	B	.LMixer_VoxLoop_UpdateEG2_Done
-
-/************************************************/
-.pool
-/************************************************/
-
 ASM_ALIGN(4)
 
 .LMixer_VoxLoop_UpdateEG1_FuncTables:
@@ -2020,53 +2037,58 @@ ASM_MODE_ARM
 #endif
 /************************************************/
 
-@ r: z(=x*2Pi) [0.32fxp]
-@ Outputs SinApprox[z] -> r in 1.29fxp
-@ Destroys ip,lr
-@ ------------------------------
-@ Uses standard symmetry identities, with the polynomial setup:
-@  f[z = -1..+1] = Sin[z * Pi/2]
-@  g[z = -1..+1] = a*z + b*z^3 = z*(a + z^2*b)
-@  a = 180h * 2^-8
-@  b = -80h * 2^-8
-
-.macro GetSin r, t @ t can be ip, but will cause warnings
-	TEQ	\r, \r, lsl #0x01        @ Test inner quadrants
-	RSBMI	\r, \r, #0x01<<31        @  Reflect z as needed, and drop one bit [1.31 -> 1.30fxp]
-	MOVS	\t, \r, asr #(30-14)     @ zs = Signed[z] -> 1.14fxp
-	MULNE	ip, \t, \t               @ z2 = zs^2 [1.14 + 1.14 = 1.28fxp]
-		                         @ z2t = z2*b [1.28 + .1 = 1.29fxp]
-	RSBNE	ip, ip, #0x30000000      @ z2t = a - z2t
-	MOVNE	\r, \r, asr #(30-19)     @ sz -> 1.19fxp
-	SMULLNE	\t, \r, ip, \r           @ Sin = sz * z2t [1.19 + 1.29 - .32 = 1.16fxp]
-.endm
-
-@ r7: z (=x*2Pi) [0.16fxp - will be wrapped]
-@ Outputs Cos -> r5, Sin -> r7 in 1.16fxp
-@ Destroys ip
-
-ASM_MODE_THUMB
-ASM_ALIGN(4)
-
-.LGetCosSin:
-	BX	pc
-	NOP
 ASM_MODE_ARM
-.LGetCosSin_ARM:
-#if AVOID_MUL_WARNINGS
-	STR	lr, [sp, #-0x04]!
-#endif
-	MOV	r7, r7, lsl #0x20-16 @ Shift up to .32fxp
-	ADD	r5, r7, #0x4000<<16  @ Shift to Cosine quadrant
-#if AVOID_MUL_WARNINGS
-	GetSin	r5, lr
-	GetSin	r7, lr
-	LDR	lr, [sp], #0x04
-#else
-	GetSin	r5, ip
-	GetSin	r7, ip
-#endif
-	BX	lr
+
+@ r0: Phase [0.16fxp - lower 16 bits]
+@ Outputs LFOKeyMod ~ Sin[x] -> ip, LFOVolMod ~ (1-Cos[x])/2 -> r9 [.14fxp]
+@ Must not destroy any register except for lr!
+
+.LMixer_VoxLoop_UpdateLFO_UpdateOscillator_Sine:
+	MOVS	lr, r0, lsl #0x11         @ x = Mod[z,1.0], C=(Mod[z,2.0]>=1.0)
+	MOV	lr, lr, lsr #0x18         @ y = 4*(x-x^2) -> ip [.14fxp] (for x = 0..1)
+	MUL	ip, lr, lr                @  -> 2^14 * 4*(x/256 - (x/256)^2) (for x = 0..255)
+	MOV	r9, r0, lsl #0x10         @ (similar idea for LFOVolMod, but z is always in range 0..1)
+	RSB	ip, ip, lr, lsl #0x08     @   = 2^16*x/256 - 2^16*(x/256)^2 = x*256 - x^2
+	MOV	lr, r9, lsr #0x18
+	MUL	r9, lr, lr
+	RSBCS	ip, ip, #0x00             @ Negate Mod[z,2.0] >= 1.0
+	RSB	r9, r9, lr, lsl #0x08
+	MUL	lr, r9, r9                @ ... and a final y^2 for LFOVolMod to make it smoother
+	MOV	r9, lr, lsr #0x0E
+	B	.LMixer_VoxLoop_UpdateLFO_UpdateOscillator_ApplySign
+
+.LMixer_VoxLoop_UpdateLFO_UpdateOscillator_Tri:
+	MOVS	lr, r0, lsl #0x11         @ x = Mod[z,1.0], C=(Mod[z,2.0]>=1.0)
+	MOV	ip, lr, lsr #(32-14)      @ y = x -> ip [.14fxp]
+	RSBMI	ip, ip, #0x02<<14         @ Reflect odd quadrants
+	RSBCS	ip, ip, #0x00             @ Reflect odd half
+	MOVS	lr, r0, lsl #0x10         @ Similar for LFOVolMod
+	MOV	r9, lr, lsr #(32-14)
+	RSBMI	r9, r9, #0x02<<14
+	B	.LMixer_VoxLoop_UpdateLFO_UpdateOscillator_ApplySign
+
+.LMixer_VoxLoop_UpdateLFO_UpdateOscillator_Saw:
+	MOV	lr, r0, lsl #0x10         @ Just sign-extend the phase for LFOKeyMod
+	MOV	ip, lr, asr #0x10
+	MOV	r9, lr, lsr #0x10         @ And zero-extend for LFOVolMod
+	B	.LMixer_VoxLoop_UpdateLFO_UpdateOscillator_ApplySign
+
+.LMixer_VoxLoop_UpdateLFO_UpdateOscillator_Square:
+	TST	r0, #0x8000               @ + for first half, - for second half
+	MOV	ip, #0x01<<14
+	RSBNE	ip, ip, #0x00
+	AND	r9, ip, ip, lsr #(31-14)  @ 0 for first half, + for second half
+	B	.LMixer_VoxLoop_UpdateLFO_UpdateOscillator_ApplySign
+
+.LMixer_VoxLoop_UpdateLFO_UpdateOscillator_Noise:
+	AND	r9, r0, #0xFF00           @ Create xorshift noise from upper 8 bits of phase
+	EOR	r9, r9, r9, lsl #0x0D
+	EOR	r9, r9, r9, lsr #0x11
+	EOR	r9, r9, r9, lsl #0x05
+	MOVS	r9, r9, lsr #(32-14)
+	MOV	ip, r9                    @ ... and negate LFOKeyMod based on shift-out bit
+	RSBCS	ip, ip, #0x00
+	B	.LMixer_VoxLoop_UpdateLFO_UpdateOscillator_ApplySign
 
 /************************************************/
 #ifdef __GBA__

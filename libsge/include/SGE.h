@@ -182,23 +182,28 @@ struct SGE_ALIGNED SGE_PACKED SGE_Wav_t {
 //!  -Timings are companded in a square root format:
 //!     Msecs = Value^2 * 1000/1626
 //!   This allows higher accuracy for shorter envelopes, with a total range of
-//!   0.0 .. 39.99 seconds (or 0.0 .. 9.9 for LFO delay time).
+//!   0.0 .. 39.99 seconds
 //!   This is a much cheaper approximation to a true logarithmic companding.
-//!  -LFO->Key operates using a Sin[x] operator.
-//!  -LFO->Volume operates using a Cos[x/2]^2 operator.
-//!  -EG1 generates an exponential decay with linear attack.
+//!  -LFO->Key operates using a Sin[x] operator (or similar).
+//!  -LFO->Volume operates using a (1+Cos[x])/2 operator (or similar).
+//!  -EG1 generates an exponential decay with linear (or parabolic) attack.
 //!  -EG2 generates a fully linear curve for all phases.
 struct SGE_ALIGNED SGE_PACKED SGE_WavArt_t {
-	uint8_t Vol;        //! [00h] Master volume  (00h = 1/256, FFh = 100%)
-	 int8_t Pan;        //! [01h] Master panning (-7Eh = 100% L, 00h = Center, +7Eh = 100% R)
-	int16_t Tune;       //! [02h] Master tuning  (+/-0100h = +/-1.0 semitones)
-	uint8_t LFORamp:1;  //! [04h, b0..0] Ramp frequency and amplitude over delay time
-	uint8_t LFODelay:7; //! [04h, b1..6] Delay time
-	uint8_t LFORate;    //! [05h] LFO frequency  (00h = 1/16Hz, FFh = 16Hz)
-	int16_t LFOToKey;   //! [06h] LFO -> Key     (+/-0100h = +/-1.0 semitones)
-	uint8_t LFOToVol;   //! [08h] LFO -> Volume  (00h = 0%, FFh = 255/256)
-	uint8_t r1[3];      //! [09h]
-	int16_t EG2ToKey;   //! [0Ch] EG2 -> Key     (+/-10h = +/-1.0 semitones)
+	uint8_t Vol;          //! [00h] Master volume    (00h = 1/256, FFh = 100%)
+	 int8_t Pan;          //! [01h] Master panning   (-7Eh = 100% L, 00h = Center, +7Eh = 100% R)
+	int16_t Tune;         //! [02h] Master tuning    (+/-0100h = +/-1.0 semitones)
+	uint8_t LFODelay;     //! [04h] Delay (or ramp) time
+	uint8_t LFORate;      //! [05h] LFO frequency    (00h = 1/16Hz, FFh = 16Hz)
+	int16_t LFOToKey;     //! [06h] LFO -> Key       (+/-0100h = +/-1.0 semitones)
+	uint8_t LFOToVol;     //! [08h] LFO -> Volume    (00h = 0%, FFh = 255/256)
+	uint8_t LFOShape:4;   //! [09h, b0..3] LFO shape (0..4 = +/-, 5..9 = +, 10..14 = -; sine/tri/saw/square/noise)
+	uint8_t LFOAmpRamp:1; //! [09h, b4..4] Ramp LFO amplitude over delay time
+	uint8_t LFOFrqRamp:1; //! [09h, b5..5] Ramp LFO frequency over delay time
+	uint8_t r1:2;         //! [09h, b6..7]
+	uint8_t EG1Shape:1;   //! [0Ah, b0..0] EG1 shape (0 = Linear, 1 = Parabolic)
+	uint8_t r2:7;         //! [0Ah, b1..7]
+	uint8_t r3;           //! [0Bh]
+	int16_t EG2ToKey;     //! [0Ch] EG2 -> Key       (+/-10h = +/-1.0 semitones)
 
 	struct SGE_PACKED SGE_WavArt_AHDSR_t { //! [0Eh] Envelope generators
 		uint8_t Attack;  //! [00h] Attack time

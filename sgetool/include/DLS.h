@@ -107,6 +107,8 @@ struct DLS_Instrument_t {
 	uint8_t  DrumKit;
 	uint32_t nLayers;
 	struct DLS_Layer_t *Layers;
+	char *Name;
+	char *Comment;
 
 	//! Global articulation
 	//! ArtLv == 0: Default articulation
