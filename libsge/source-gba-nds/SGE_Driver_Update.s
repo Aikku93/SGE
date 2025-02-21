@@ -662,9 +662,11 @@ ASM_MODE_THUMB
 #if SGE_SUPPORT_ADPCM
 	LDRB	r3, [r0, #0x00]           @ Wav.Frmt -> ip
 #endif
-#if !SGE_USE_VOLSUBDIV
+#if (!SGE_USE_VOLSUBDIV && !SGE_PRECISE_KEYON)
 	SUB	r6, #SGE_VOX_STAT_KEYON   @ Only clear KEYON if not ramping. When ramping, we detect this flag
-		                          @ and then avoid ramping from the old value if we have no attack time
+		                          @ and then avoid ramping from the old value if we have no attack time.
+		                          @ We also need this flag when using precise key-on timing, since we
+		                          @ need to know if Phase contains a sample offset in it.
 #endif
 	MOV	r2, #0x18                 @ Vox.Data = &Wav.Data[] -> r2
 	ADD	r2, r0
@@ -727,7 +729,9 @@ ASM_MODE_THUMB
 1:	STRH	r0, [r4, #0x0A]           @ Store EG2
 1:	MOV	r0, #0x00                 @ LFO = 0, Phase = 0
 	STR	r0, [r4, #0x0C]
+#if !SGE_PRECISE_KEYON
 	STRH	r0, [r4, #0x18]
+#endif
 	B	.LMixer_VoxLoop_KeyOn_Done
 
 @ Without ramping, we have a trade-off where the EG value is
@@ -927,6 +931,7 @@ ASM_MODE_ARM
 	.word .LMixer_VoxLoop_UpdateLFO_UpdateOscillator_Saw
 	.word .LMixer_VoxLoop_UpdateLFO_UpdateOscillator_Square
 	.word .LMixer_VoxLoop_UpdateLFO_UpdateOscillator_Noise
+	.pool
 .LMixer_VoxLoop_UpdateLFO_UpdateOscillator_ApplySign:
 	TST	fp, #0x10                 @ LFOAmpRamp?
 	MOVNE	lr, r0, lsr #(16+16-15)   @  Y: LFOKeyMod *= LFOFade, LFOVolMod *= LFOFade
@@ -1035,12 +1040,12 @@ ASM_MODE_THUMB
 	STRH	r2, [r4, #0x06]           @ Store new volumes to voice
 	STRH	r3, [r4, #0x1A]
 #endif
-	ASR	r0, r1, #0x08-SGE_NOTELUT_BITS @ int(Key) -> r0
 	LDRH	r7, [r4, #0x18]           @ Position = Phase -> r7
 ASM_ALIGN(4)
 	BX	pc
 	NOP
 ASM_MODE_ARM
+	LDR	r9, [sp, #0x14]           @ Dst   = MixBuf -> r9
 #if SGE_USE_VOLSUBDIV
 	LDRH	r6, [r4, #0x06]           @ Load previous volume
 	LDRH	ip, [r4, #0x1A]
@@ -1051,15 +1056,21 @@ ASM_MODE_ARM
 	ADCEQ	r2, r2, #0x00
 	MOVS	r3, r3, lsr #(15-SGE_MIXER_VOLBITS)
 	ADCEQ	r3, r3, #0x00
-#if SGE_USE_VOLSUBDIV
-	LDRB	fp, [r4, #0x00]
 	LDRH	r5, [sp, #0x0E]           @ MxCnt = N -> r5
-	TST	fp, #SGE_VOX_STAT_KEYON   @ If we have KEYON, then we must NOT ramp
+#if (SGE_USE_VOLSUBDIV || SGE_PRECISE_KEYON)
+	LDRB	fp, [r4, #0x00]
+	TST	fp, #SGE_VOX_STAT_KEYON   @ If we have KEYON, then we must NOT ramp (and must skip samples as needed)
 	BICNE	fp, fp, #SGE_VOX_STAT_KEYON
 	STRNEB	fp, [r4, #0x00]
+# if SGE_USE_VOLSUBDIV
 	ORR	r5, r5, r5, lsl #0x10     @ MxCnt | MxCntPerSubdiv<<16 -> r5
 	ORRNE	r6, r2, r3, lsl #0x10
+# endif
+# if !SGE_PRECISE_KEYON
 	BNE	1f
+# else
+	BNE	.LMixer_VoxLoop_KeyOnShift
+# endif
 0:	MOVS	r6, r6, lsr #(15-SGE_MIXER_VOLBITS) @ Re-scale the old volume in the same way we scaled the new volume
 	ADCEQ	r6, r6, #0x00
 	MOVS	ip, ip, lsr #(15-SGE_MIXER_VOLBITS)
@@ -1121,6 +1132,9 @@ ASM_MODE_ARM
 	CMPCS	fp, fp, lsl #0x10         @ Ratio still too large?
 	BHI	0b
 0:	ADD	r3, r2, r3, lsl #0x10     @ VolStep = DeltaL|DeltaR<<16 -> r3
+#endif
+.LMixer_VoxLoop_KeyOnShift_Finish:
+#if SGE_USE_VOLSUBDIV
 1:	MOV	r2, r5, lsr #0x10         @ SubdivCounter = MxCntPerSubdiv -> r2
 	ADD	fp, sp, #VOLSTEP_DIVCOUNT_SP_OFFS
 # ifdef __GBA__
@@ -1144,6 +1158,7 @@ ASM_MODE_ARM
 	ORR	r6, r2, r3, lsl #0x10     @ VolL | VolR<<16 -> r6
 #endif
 0:	LDR	ip, =SGE_KeyScale         @ Octave = Key/12 -> r2
+	MOV	r0, r1, asr #0x08-SGE_NOTELUT_BITS @ int(Key) -> r0
 	ADD	r2, r0, r0, asr #0x02     @ x/12 ~= x*(1+2^-2)(1+2^-4)(1+2^-8)(1+2^-16)*2^-4 (up to rounding)
 	ADD	r2, r2, r2, asr #0x04
 #if (24+SGE_NOTELUT_BITS >= 28)
@@ -1235,10 +1250,6 @@ ASM_MODE_ARM
 
 .LMixer_VoxLoop_MixLoop:
 	LDRH	r3, [r8, #0x00]            @ Wav.{Interpolate|Frmt,Chan} -> r3,lr
-#if !SGE_USE_VOLSUBDIV
-	LDRH	r5, [sp, #0x0E]            @ MxRem = N      -> r5
-#endif
-	LDR	r9, [sp, #0x14]            @ Dst   = MixBuf -> r9
 #if (defined(__GBA__) && !SGE_USE_VOLSUBDIV)
 	LDR	r2, [sp, #0x18]            @ Bias -> r2
 #endif
@@ -1452,6 +1463,33 @@ ASM_MODE_ARM
 	BLX	.LMixer_VoxLoop_Tail
 #endif
 
+/************************************************/
+#if SGE_PRECISE_KEYON
+/************************************************/
+
+.LMixer_VoxLoop_KeyOnShift:
+	TST	fp, #SGE_VOX_STAT_NOPLAYER @ If we have no player, skip this whole thing
+	BNE	0f
+#if SGE_USE_VOLSUBDIV
+	CMP	r7, r5, lsr #0x10          @ Clip to M=N-1 samples
+	MOVCS	r7, r5, lsr #0x10
+	SUBCS	r7, r7, #0x01
+#else
+	CMP	r7, r5
+	SUBCS	r7, r5, #0x01
+#endif
+#ifdef __GBA__
+	MOVS	r0, r7                     @ Skip M samples
+	BLNE	.LMixer_VoxLoop_MixLoop_ApplySilence
+#else
+	ADD	r9, r9, r7, lsl #0x03
+#endif
+	SUB	r5, r5, r7                 @ MxCnt -= SkippedSamples
+0:	MOV	r7, #0x00                  @ Reset Phase=0
+	B	.LMixer_VoxLoop_KeyOnShift_Finish
+
+/************************************************/
+#endif
 /************************************************/
 .pool
 /************************************************/
@@ -1771,13 +1809,13 @@ ASM_MODE_ARM
 #endif
 
 @ r0: nSamplesRem
-@ Return r0=0, destroys r1
+@ Return r0=0, destroys ip
 #ifdef __GBA__
 .LMixer_VoxLoop_MixLoop_ApplySilence:
-1:	LDR	r1, [r9]                  @ Add bias to remaining samples
+1:	LDR	ip, [r9]                  @ Add bias to remaining samples
 	SUBS	r0, r0, #0x01
-	ADD	r1, r1, r6, lsl #SGE_MIXER_VOLFRACBITS
-	STR	r1, [r9], #0x04
+	ADD	ip, ip, r6, lsl #SGE_MIXER_VOLFRACBITS
+	STR	ip, [r9], #0x04
 	BNE	1b
 0:	BX	lr
 #endif
@@ -1893,6 +1931,9 @@ ASM_MODE_ARM
 	MOV	r7, r0
 #endif
 	LDR	r4, [r5, #0x10]          @ Player = PlayersList -> r4
+#if SGE_PRECISE_KEYON
+	SUB	sp, #0x04                @ Make room for SampleOffs in stack
+#endif
 #if (!defined(__NDS__) || __NDS__ != 9)
 	LDR	r6, =SGE_Driver_UpdatePlayer
 #endif
@@ -1907,6 +1948,9 @@ ASM_MODE_ARM
 	LDR	r4, [r4, #0x1C]          @ Player = Player->Next
 	B	1b
 2:
+#if SGE_PRECISE_KEYON
+	ADD	sp, #0x04
+#endif
 
 /************************************************/
 

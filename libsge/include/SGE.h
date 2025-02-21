@@ -464,6 +464,10 @@ struct SGE_PTRALIGNED SGE_PACKED SGE_Player_t {
 //!   fill the TrkVol/TrkPan/TrkBnd members with desired playback data, then
 //!   write SGE_VOX_STAT_NOPLAYER|SGE_VOX_STAT_KEYON|SGE_VOX_STAT_ACTIVE to
 //!   Stat.
+//!  -On key-on, if SGE_VOX_STAT_NOPLAYER is not used, then the Phase member
+//!   is used to store the sample-level synchronization. This allows a sample
+//!   to start "partly into" the mixing chunk for better granularity. Note
+//!   that envelopes are still aligned to the mix chunk, however.
 union SGE_PACKED SGE_Vox_PlayState_t {
 	//! With Trk != NULL
 	const struct SGE_Player_t *Ply; //! [00h] Linked song player

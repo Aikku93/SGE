@@ -40,10 +40,10 @@ The maximum fractional precision we can use is 5 bits:
 #if !SGE_VARIABLE_SYNC_RATE
 # ifdef __GBA__
 #  define UPDATERATE_NUM (GBA_HW_FREQ_HZ * 5)
-#  define UPDATERATE_DEN ((GBA_FRAME_CYCLES >> SGE_BPM_FRACBITS) * (QUARTERNOTE_TICKS/12))
+#  define UPDATERATE_DEN ((GBA_FRAME_CYCLES >> SGE_BPM_FRACBITS) * (SGE_QUARTERNOTE_TICKS/12))
 # else
 #  define UPDATERATE_NUM (67027964 << SGE_BPM_FRACBITS)
-#  define UPDATERATE_DEN (18673 * QUARTERNOTE_TICKS)
+#  define UPDATERATE_DEN (18673 * SGE_QUARTERNOTE_TICKS)
 # endif
 # define UPDATERATE_BPM ((UPDATERATE_NUM + (UPDATERATE_DEN/2)) / UPDATERATE_DEN)
 #endif
@@ -56,6 +56,7 @@ The maximum fractional precision we can use is 5 bits:
 @  r6:         (must be preserved)
 @  r7:  UpdateBPM (must be preserved)
 @  r8-fp: Saved
+@  sp+00h: SampleOffs (empty space)
 
 ASM_FUNC_GLOBAL(SGE_Driver_UpdatePlayer)
 ASM_FUNC_BEG   (SGE_Driver_UpdatePlayer, ASM_FUNCSECT_TEXT;ASM_MODE_THUMB)
@@ -69,23 +70,35 @@ SGE_Driver_UpdatePlayer:
 0:	LDR	r6, [r4, #0x10]     @ Song -> r6?
 	LDRH	r0, [r4, #0x08+2]   @ Tempo -> r0
 	CMP	r6, #0x00
-#if (SGE_VARIABLE_SYNC_RATE || SGE_BPM_FRACBITS > 0)
 	BEQ	.LExitLocalTrampoline
-#else
-	BEQ	.LExit
-#endif
 0:	LDRH	r1, [r4, #0x02]     @ StretchedTempo = TempoStretch * Tempo [.8fxp]
 	MOV	r2, #0x0E
 	LDRSH	r3, [r4, r2]        @ Phase -> r3
-	MUL	r0, r1
-	LSR	r0, #0x08-SGE_BPM_FRACBITS     @ int(StretchedTempo) -> r0
-	BEQ	.LExit                         @  Immediately exit when paused
-	LSR	r2, r0, #(10+SGE_BPM_FRACBITS) @ Clip StretchedTempo to max 1023BPM
+	MUL	r1, r0
+	LSR	r1, #0x08-SGE_BPM_FRACBITS     @ int(StretchedTempo) -> r1
+	BEQ	.LExitLocalTrampoline          @  Immediately exit when paused
+	LSR	r2, r1, #(10+SGE_BPM_FRACBITS) @ Clip StretchedTempo to max 1023BPM
 	BEQ	0f
-	MVN	r0, r2
-	LSR	r0, #0x20-(10+SGE_BPM_FRACBITS)
-0:	SUB	r2, r3, r0          @ Phase -= StretchedTempo?
+	MVN	r1, r2
+	LSR	r1, #0x20-(10+SGE_BPM_FRACBITS)
+0:	SUB	r2, r3, r1          @ Phase -= StretchedTempo?
 	BGT	.LProcessPlayer_End @  <- On break-even (Phase == 0), process tick now
+#if SGE_PRECISE_KEYON
+0:	LDRH	r0, [r5, #0x0E]     @ BufLen -> r0
+	ASR	r2, r3, #0x1F       @ Phase < 0?
+	BIC	r3, r2
+	BIC	r0, r2              @  Y: SampleOffs = 0
+	BEQ	0f
+	MUL	r0, r3              @  N: SampleOffs = BufLen*Phase/StretchedTempo
+	@MOV	r1, r1
+	BL	__aeabi_uidiv
+0:
+# if SGE_VARIABLE_SYNC_RATE
+	STR	r0, [sp, #0x04*5]
+# else
+	STR	r0, [sp, #0x04*4]
+# endif
+#endif
 
 @ r4: &Player
 @ r5: &Driver
@@ -183,11 +196,9 @@ SGE_Driver_UpdatePlayer:
 	LDR	r0, [r1, r0]
 	BX	r0
 
-#if (SGE_VARIABLE_SYNC_RATE || SGE_BPM_FRACBITS > 0)
 @ This is needed because otherwise the jump is out of range, oops...
 .LExitLocalTrampoline:
 	B	.LExit
-#endif
 
 .LTrackReadLoop_End:
 	STR	r6, [r4, #0x28]     @ Store next Src
@@ -223,20 +234,28 @@ SGE_Driver_UpdatePlayer:
 	ADD	r2, #0xFF
 	ADD	r2, #UPDATERATE_BPM - 255
 #endif
-	MUL	r0, r1
+	MUL	r1, r0
 	STRH	r2, [r4, #0x0E]
-	LSR	r0, #0x08-SGE_BPM_FRACBITS     @ int(StretchedTempo) -> r0
-	LSR	r3, r0, #(10+SGE_BPM_FRACBITS) @ Clip StretchedTempo to max 1023BPM
+	LSR	r1, #0x08-SGE_BPM_FRACBITS     @ int(StretchedTempo) -> r1
+	LSR	r3, r1, #(10+SGE_BPM_FRACBITS) @ Clip StretchedTempo to max 1023BPM
 	BEQ	0f
-	MVN	r0, r3
-	LSR	r0, #0x20-(10+SGE_BPM_FRACBITS)
-0:	SUB	r2, r0              @ Phase -= StretchedTempo?
+	MVN	r1, r3
+	LSR	r1, #0x20-(10+SGE_BPM_FRACBITS)
+0:	SUB	r2, r1              @ Phase -= StretchedTempo?
 #if (SGE_BPM_FRACBITS == 0)
+# if !SGE_PRECISE_KEYON
 	BLT	.LProcessTick       @  <- On break even (Phase == 0), stop
+# else
+	BLT	.LProcessTick_UpdateSampleOffs
+# endif
 #else
 	MOV	r3, #0x01 << SGE_BPM_FRACBITS
 	CMN	r2, r3              @  <- Same as normal case, but need to check for
+# if !SGE_PRECISE_KEYON
 	BLE	.LProcessTick       @     Phase <= -1.0 rather than just Phase < 0.
+# else
+	BLE	.LProcessTick_UpdateSampleOffs
+# endif
 #endif
 
 .LProcessPlayer_End:
@@ -259,6 +278,36 @@ SGE_Driver_UpdatePlayer:
 # endif
 #endif
 
+/************************************************/
+#if SGE_PRECISE_KEYON
+/************************************************/
+
+.LProcessTick_UpdateSampleOffs:
+0:	LDRH	r0, [r5, #0x0C]     @ RateHz -> r0
+# if (SGE_QUARTERNOTE_TICKS == 48)
+	LSL	r1, #0x02           @ SampleOffs += RateHz*5 / (StretchedTempo*QUARTERNOTE_TICKS/12)
+# else
+#  error "FIXME: BufLen*QUARTERNOTE_TICKS/12"
+# endif
+	LSL	r2, r0, #0x02
+	ADD	r0, r2
+# if (SGE_BPM_FRACBITS > 0)
+	LSL	r0, #SGE_BPM_FRACBITS
+# endif
+	BL	__aeabi_uidiv
+# if SGE_VARIABLE_SYNC_RATE
+	LDR	r1, [sp, #0x04*5]
+	ADD	r1, r0
+	STR	r1, [sp, #0x04*5]
+# else
+	LDR	r1, [sp, #0x04*4]
+	ADD	r1, r0
+	STR	r1, [sp, #0x04*4]
+# endif
+	B	.LProcessTick
+
+/************************************************/
+#endif
 /************************************************/
 
 @ r0: &Ctrl (preserved on return)

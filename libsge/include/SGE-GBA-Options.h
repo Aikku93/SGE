@@ -93,7 +93,8 @@
 #define SGE_VARIABLE_SYNC_RATE  0 //! 0 = Fixed ~60Hz, 1 = Depend on BufLen
 #define SGE_RECPLUT_BITS       16 //! Size of each entry in the table, in bits (8, 16, or 32)
 #define SGE_RECPLUT_PRECISION  15 //! Precision of the reciprocals table (ie. 2^PRECISION/x)
-#define SGE_BPM_FRACBITS        0 //! Fractional bits of tempo counter
+#define SGE_BPM_FRACBITS        5 //! Fractional bits of tempo counter
+#define SGE_PRECISE_KEYON       1 //! 0 = Snap key-on to mix chunks, 1 = Align key-on to samples
 #define SGE_STEREO_WAVEFORMS    1 //! 0 = Mono waveforms only, 1 = Enable stereo-sampled waveforms
 #define SGE_EG1_LOG2THRESHOLD   6 //! Voice is killed when EG1 drops below 1.0*2^-n (maximum 16)
 #define SGE_MIXER_VOLBITS       7 //! Volume bits to use in mix (fixed 7 in GBA driver)

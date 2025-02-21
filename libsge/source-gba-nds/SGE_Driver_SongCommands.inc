@@ -13,6 +13,10 @@
 @  r9-fp,lr: Free to use
 @  sp+00h: &Player
 @  sp+04h: &Driver
+@  sp+08h: [Reserved]
+@  sp+0Ch: [Reserved] (SGE_VARIABLE_SYNC_RATE == 0) | UpdateBPM  (SGE_VARIABLE_SYNC_RATE == 1)
+@  sp+10h: SampleOffs (SGE_VARIABLE_SYNC_RATE == 0) | [Reserved] (SGE_VARIABLE_SYNC_RATE == 1)
+@  sp+14h:                                            SampleOffs (SGE_VARIABLE_SYNC_RATE == 1)
 @ Handlers must return to either .LTrackReadLoop or .LTrackReadLoop_End.
 @ On returning to .LTrackReadLoop_End, r0 must be NewRestCounter.
 @ Return address on returning will be ignored, so BL is fine if needed.
@@ -854,8 +858,18 @@ ASM_ALIGN(4)
 	STR	r5, [r7]           @ Store updated voice priority
 	SUB	r6, r3             @ VoxIdx = VoxCnt - nVoiceRem -> r6
 	POP	{r1,r3,r7}
+#if SGE_PRECISE_KEYON
+# if !SGE_VARIABLE_SYNC_RATE
+	LDR	r5, [sp, #0x2C]    @ SampleOffs -> r5
+# else
+	LDR	r5, [sp, #0x30]
+# endif
+#endif
 0:	MOV	r2, #SGE_VOX_STAT_ACTIVE | SGE_VOX_STAT_KEYON
 	STRB	r2, [r4, #0x00]    @ Stat = ACTIVE|KEYON
+#if SGE_PRECISE_KEYON
+	STRH	r5, [r4, #0x18]    @ Phase = SampleOffs
+#endif
 	ADD	r4, #0x20
 	STMIA	r4!, {r3,r7}       @ Store Vox.{Wav,Art}
 	LDR	r5, [sp, #0x04]    @ Track -> r5
@@ -929,15 +943,15 @@ ASM_ALIGN(4)
 	BNE	.LReadNoteCommandLoop_NoteOn_LayerLoop_FindVoice_PortamentoRestart
 
 .LReadNoteCommandLoop_NoteOn_LayerLoop_FindVoice_PortamentoEdgeCase:
-	LDRB	r6, [r5, #0x00]    @ Clear KEYOFF and NOPLAYER
+	LDRB	r7, [r5, #0x00]    @ Clear KEYOFF and NOPLAYER
 	STR	r2, [r5, #0x28]    @ Restore Player,Trk to voice
 	STR	r4, [r5, #0x2C]
-	SUB	r6, #SGE_VOX_STAT_KEYOFF|SGE_VOX_STAT_NOPLAYER
-	STRB	r6, [r5, #0x00]
-	MOV	r6, #0x24
-	ADD	r6, r2
-	STRB	r0, [r6, #0x02]    @ Portamento.Value = Note to resynchronize at new pitch
-	STRB	r6, [r6, #0x00]    @ Portamento.Phase = 0
+	SUB	r7, #SGE_VOX_STAT_KEYOFF|SGE_VOX_STAT_NOPLAYER
+	STRB	r7, [r5, #0x00]
+	MOV	r7, #0x24
+	ADD	r7, r2
+	STRB	r0, [r7, #0x02]    @ Portamento.Value = Note to resynchronize at new pitch
+	STRB	r6, [r7, #0x00]    @ Portamento.Phase = 0
 	B	0b
 
 .LReadNoteCommandLoop_NoteOn_LayerLoop_FindVoice_PortamentoRestart:
