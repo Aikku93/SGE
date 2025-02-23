@@ -313,14 +313,13 @@ static double AbsoluteDeciPercent(const struct rgnart_t *c, double MinValue, dou
 	return v;
 }
 
-//! AbsoluteDecibels = (20Log10[Value] + 96) * 10*65536
-//! Value = 10^((AbsoluteDecibels / 10 / 65536 - 96) / 20)
+//! AbsoluteDecibels = (20Log10[Value] + 100) * 10*65536
+//! Value = 10^((AbsoluteDecibels / 10 / 65536 - 100) / 20)
 //! NOTE: Final output is converted to linear units.
-//! NOTE: There appears to be some confusion regarding the reflection
-//! point, with gm.dls using 100dB instead of 96dB, for example...
+//! NOTE: I have no idea if this is even right...
 static double AbsoluteDecibels(const struct rgnart_t *c, double MinValue, double MaxValue) {
 	double v = (double)c->Scale;
-	v = v / (65536.0 * 10.0) - 96.0;
+	v = v / (65536.0 * 10.0) - 100.0;
 	v = CLAMP(v, MinValue, MaxValue);
 	return pow(10.0, v / 20.0);
 }
