@@ -313,13 +313,13 @@ static double AbsoluteDeciPercent(const struct rgnart_t *c, double MinValue, dou
 	return v;
 }
 
-//! AbsoluteDecibels = (20Log10[Value] + 100) * 10*65536
-//! Value = 10^((AbsoluteDecibels / 10 / 65536 - 100) / 20)
+//! AbsoluteDecibels = (20Log10[Value]/96 + 1.0) * (65536.0 * 10.0 * 100.0)
+//! Value = 10^((AbsoluteDecibels / 100 / 10 / 65536 - 1) * 96 / 20)
 //! NOTE: Final output is converted to linear units.
-//! NOTE: I have no idea if this is even right...
+//! NOTE2: This is by far the most convoluted mess I've seen in this spec...
 static double AbsoluteDecibels(const struct rgnart_t *c, double MinValue, double MaxValue) {
 	double v = (double)c->Scale;
-	v = v / (65536.0 * 10.0) - 100.0;
+	v = (v / (65536.0 * 10.0 * 100.0) - 1.0) * 96.0;
 	v = CLAMP(v, MinValue, MaxValue);
 	return pow(10.0, v / 20.0);
 }
