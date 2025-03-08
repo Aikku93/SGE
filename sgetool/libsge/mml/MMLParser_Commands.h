@@ -822,7 +822,7 @@ static int MML_Command_NoteStackOrTripletMode(struct MML_t *MML) {
 
 		//! Triplets section
 		if(MML->State.IsTripletMode) {
-			MML_AppendError(MML, "Unexpected `{{{`: a triplets section was already started.", &CommandOffs);
+			MML_AppendError(MML, "Unexpected `{{`: a triplets section was already started.", &CommandOffs);
 			return MML_ERROR;
 		}
 		MML->State.IsTripletMode = 1;
