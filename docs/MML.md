@@ -149,8 +149,8 @@ can be set to apply to that note only, or to become "sticky" and apply to all
 further notes, as though a `v` command had been used. This is achieved by
 appending a `=` character immediately after the note (and its duration, if any)
 followed by the velocity to use (1..128). If the velocity needs to "stick", a
-`!` character may be appended after the velocity value (eg. `c^e=64^g` will
-override the velocity only for the E note, whereas `c^e=64!^g` overrides the
+`!` character may be appended after the velocity value (eg. `{ce=64g}` will
+override the velocity only for the E note, whereas `{ce=64!g}` overrides the
 velocity for the E note, and uses it for all notes that follow).
 
 Multiple notes may be played simultaneously. The syntax for this is to enclose
