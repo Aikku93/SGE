@@ -36,6 +36,10 @@ Additionally, the library can be very thoroughly configured with compile-time sw
 * Resolution of volume ramping subdivisions
 * Loop unrolling
 
+## MML Reference
+
+The MML reference specs can be found [here](docs/MML.md). It may need to be expanded upon at a later stage.
+
 ## ... Why? Just why?
 
 I'm developing this driver for a tech demo I'm working on. It's been a very wild, but fun ride, so far.
