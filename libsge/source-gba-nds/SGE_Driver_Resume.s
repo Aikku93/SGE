@@ -50,6 +50,7 @@ SGE_Driver_Resume:
 
 .LSetupHardware:
 #ifdef __GBA__
+# if SGE_SELFMANAGED_HW
 	LDR	r1, =REG_SOUNDCNT           @ Enable all required audio hardware
 	LDRH	r2, [r1, #REG_SOUNDCNT_X - REG_SOUNDCNT]
 	MOV	r3, #REG_SOUNDCNT_X_MASTER_ENABLE
@@ -102,6 +103,7 @@ SGE_Driver_Resume:
 	ADD	r2, #REG_SOUNDFIFO_B - REG_SOUNDFIFO_A
 	STMIA	r1!, {r0,r2,r3}                            @ DMA2SAD = RightBuf, DMA1DAD = FIFO_B, DMA1CNT = Cnt
 	MOV	r5, r1                                     @ &DMA3SAD -> r5
+# endif
 2:	LDR	r0, =GBA_HW_FREQ_HZ*2                      @ Get Period = Round[HW_FREQ / RateHz]
 	LDRH	r1, [r4, #0x0C]
 	BL	__aeabi_uidiv
@@ -112,10 +114,12 @@ SGE_Driver_Resume:
 	ADD	r0, #0x01
 	LSR	r0, #0x01
 # endif
+# if SGE_SELFMANAGED_HW
 	MOV	r1, #REG_TIMER_H_ENABLE+1                  @ Start timer and return Period
 	LSL	r1, #0x10
 	SUB	r1, r0
 	STR	r1, [r5, #REG_TIMER(SGE_HWTIMER_IDX) - REG_DMASAD(3)]
+# endif
 #else
 	LDRH	r3, [r4, #0x0C]                            @ BeginStream(LeftBuf, RightBuf, BufLen*BufCnt, RateHz)?
 	LSR	r2, r5, #0x01+1-1

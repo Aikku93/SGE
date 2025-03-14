@@ -17,7 +17,7 @@ SGE_Driver_Pause:
 	SUB	r2, #SGE_DRIVER_STATE_READY - SGE_DRIVER_STATE_PAUSED
 	BNE	2f                        @ Invalid state?
 1:	STRB	r3, [r0, #0x00]           @ Mark paused
-#ifdef __GBA__
+#if (defined(__GBA__) && SGE_SELFMANAGED_HW)
 	LDR	r2, =REG_SOUNDFIFO_A
 	MOV	r3, #0x00                 @ Stop DMA and timer
 	STR	r3, [r2, #REG_DMACNT(1) - REG_SOUNDFIFO_A]

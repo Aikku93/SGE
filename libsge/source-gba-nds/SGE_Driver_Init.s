@@ -45,9 +45,11 @@ SGE_Driver_Init:
 	STRH	r2, [r0, #0x0C]             @ Store RateHz
 	STRH	r4, [r0, #0x0E]             @ Store BufLen
 #ifdef __GBA__
+# if SGE_SELFMANAGED_HW
 	MUL	r3, r4
 	LSL	r3, #(32-4)                 @ Ensure (BufLen*BufCnt) % 16 == 0
 	BNE	.LExit_Error
+# endif
 # if SGE_USE_VOLSUBDIV
 	LSL	r3, r4, #(32-SGE_VOLSUBDIV_LOG2MAXSUBDIV)
 	BNE	.LExit_Error                @ Ensure BufLen%SUBDIV == 0

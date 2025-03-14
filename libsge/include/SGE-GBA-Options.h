@@ -83,6 +83,7 @@
 //!   to much better performance, but will add a lot of code in RAM.
 //!   Any samples left after the unrolled block will be mixed in a
 //!   one-sample-per-iteration loop.
+#define SGE_SELFMANAGED_HW      1 //! 0 = User manages sound hardware, 1 = Driver manages hardware
 #define SGE_SUPPORT_ADPCM       1 //! 0 = Disable ADPCM waveforms, 1 = Enable ADPCM waveforms
 #define SGE_SUPPORT_PCM8        1 //! 0 = Disable PCM8 waveforms, 1 = Enable PCM8 waveforms
 #define SGE_SUPPORT_PCM16       0 //! 0 = Disable PCM16 waveforms. PCM16 is NOT available on GBA.
