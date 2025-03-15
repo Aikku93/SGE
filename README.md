@@ -20,6 +20,8 @@ Definitely not the fastest by a wide margin (there are way too many features imp
 * Sampling rate and number of voices is controlled at run-time
 * Support for 2x oversampling (using linear interpolation) to reduce hardware aliasing artifacts
   * This is really only needed for GBA, where the usual playback rates are not nice multiples of 32768Hz.
+* Support for resampling the final signal to 32768Hz (or any 2^n sampling rate) using linear interpolation
+  * This is only available on GBA, with the intent to replace hardware aliasing with interpolation aliasing instead.
 * Music and waveforms can be loaded from disk/card using a simple IO interface (read/allocate/free)
 * Music is defined using MML, combined with a DLS soundbank (SF2 and MIDI support planned... eventually)
 * Extremely feature-rich (read as: overengineered) compiler, with many, many options regarding waveform conversions.
