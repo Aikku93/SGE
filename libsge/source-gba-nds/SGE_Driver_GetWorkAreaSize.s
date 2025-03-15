@@ -40,7 +40,7 @@ SGE_Driver_GetWorkAreaSize:
 #endif
 	ADD	r0, r1                             @ Size += BufSize
 #if (defined(__GBA__) && defined(SGE_RESAMPLE_TARGET))
-	LDR	r1, =0x01*SGE_RESAMPLE_BUFSIZE * 2 @ Add resampled buffers
+	LDR	r1, =0x01*SGE_RESAMPLE_BUFSIZE*SGE_RESAMPLE_NBUFFERS * 2 @ Add resampled buffers
 	ADD	r0, r1
 #endif
 	BX	lr

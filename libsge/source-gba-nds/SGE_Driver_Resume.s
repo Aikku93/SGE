@@ -32,7 +32,7 @@ SGE_Driver_Resume:
 #endif
 	STRB	r1, [r4, #0x0B]               @ BufIdxW = BufCnt-1
 #if (defined(__GBA__) && defined(SGE_RESAMPLE_TARGET))
-	MOV	r1, #0x01
+	MOV	r1, #SGE_RESAMPLE_NBUFFERS-1
 	STRB	r1, [r4, #0x08]               @  <- Force a reset on the next Sync()
 #endif
 0:	MUL	r5, r3                        @ memset(OutBuf, 0, sizeof(Sample_t[2])*BufCnt*BufLen)
@@ -40,7 +40,7 @@ SGE_Driver_Resume:
 	@MOV	r0, r0
 #if (defined(__GBA__) && defined(SGE_RESAMPLE_TARGET))
 	STR	r1, [r4, #0x18+SGE_PLATFORM_RESAMPLE_SAMP_OFFS]
-	LDR	r2, =0x01*SGE_RESAMPLE_BUFSIZE * 2
+	LDR	r2, =0x01*SGE_RESAMPLE_BUFSIZE*SGE_RESAMPLE_NBUFFERS * 2
 	LSL	r5, #0x00+1
 	ADD	r2, r5
 #else
@@ -60,7 +60,7 @@ SGE_Driver_Resume:
 #endif
 #if (defined(__GBA__) && defined(SGE_RESAMPLE_TARGET))
 	ADD	r0, r5                        @ Seek to resampled buffer and set new buffer stride
-	LDR	r5, =0x01 * SGE_RESAMPLE_BUFSIZE
+	LDR	r5, =0x01 * SGE_RESAMPLE_BUFSIZE*SGE_RESAMPLE_NBUFFERS
 #endif
 
 .LSetupHardware:

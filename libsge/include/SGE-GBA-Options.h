@@ -113,13 +113,12 @@
 //! Resampling-specific compilation options
 //! Notes:
 //!  -Defining RESAMPLE_TARGET enables resampling.
-//!  -The resampled buffer is always double-buffered; RESAMPLE_BUFSIZE
-//!   then refers to the size of the two buffers combined.
 //!  -Only SGE_RESAMPLE_LOG2TARGET and SGE_RESAMPLE_BUFSIZE should be
 //!   changed; the other definitions must remain as they are.
 #define SGE_RESAMPLE_LOG2TARGET  15
 #define SGE_RESAMPLE_TARGET     (1 << SGE_RESAMPLE_LOG2TARGET)
-#define SGE_RESAMPLE_BUFSIZE    (272 * 2) //! 544 is approximately 60Hz @ 32768Hz
+#define SGE_RESAMPLE_BUFSIZE     272 //! 544 is approximately 60Hz @ 32768Hz
+#define SGE_RESAMPLE_NBUFFERS    2
 #define SGE_RESAMPLE_LOG2PERIOD (24 - SGE_RESAMPLE_LOG2TARGET)
 #define SGE_RESAMPLE_PERIOD     (1 << SGE_RESAMPLE_LOG2PERIOD)
 

@@ -24,9 +24,9 @@ SGE_Driver_Sync:
 	BNE	.LEarlyExit
 0:	LDRB	r1, [r0, #0x08]           @ BfIdx -> r1
 #ifdef SGE_RESAMPLE_TARGET
-	MOV	r2, #0x01                 @ BfIdx ^= 1?
-	EOR	r1, r2
-	BNE	2f
+	ADD	r1, #0x01                 @ ++BfIdx >= BfCnt?
+	CMP	r1, #SGE_RESAMPLE_NBUFFERS
+	BCC	2f
 #else
 	LDRB	r2, [r0, #0x09]           @ BfCnt -> r2
 	ADD	r1, #0x01                 @ ++BfIdx >= BfCnt?
@@ -56,7 +56,7 @@ SGE_Driver_Sync:
 	LDRH	r2, [r4, #0x0E]           @ BfLen -> r2
 	MUL	r7, r2                    @ BufSize = BfCnt*BfLen -> r7
 	MOV	r3, r7
-	LDR	r2, =(SGE_RESAMPLE_BUFSIZE)/2 * SGE_RESAMPLE_PERIOD
+	LDR	r2, =SGE_RESAMPLE_BUFSIZE * SGE_RESAMPLE_PERIOD
 	MUL	r3, r1                    @ BufSize*MixPeriod -> r3
 	ADD	r2, r0                    @ SampOffs += N*ResamplePeriod
 1:	SUB	r2, r3                    @ Wrap SampOffs about BufSize*MixPeriod
@@ -97,9 +97,15 @@ ASM_MODE_ARM
 #endif
 	LDRB	ip, [r4, #0x08]           @ Seek OutBuffer as needed
 	ORR	r0, r6, r0, lsl #0x10     @ Rate | Phase<<16 -> r0
-	MOV	r3, #(SGE_RESAMPLE_BUFSIZE/2)
+	MOV	r3, #SGE_RESAMPLE_BUFSIZE
+#if (SGE_RESAMPLE_NBUFFERS == 2)
 	CMP	ip, #0x00
-	ADDEQ	r1, r1, #0x01*(SGE_RESAMPLE_BUFSIZE/2)
+	ADDEQ	r1, r1, #0x01*SGE_RESAMPLE_BUFSIZE
+#else
+	SUBS	ip, ip, #0x01             @ Write to the buffer that was last played
+	ADDCC	ip, ip, #SGE_RESAMPLE_NBUFFERS
+	MLA	r1, r3, ip, r1
+#endif
 	SUBS	ip, r5, #0x01
 	ADDCC	ip, ip, r7
 #if SINC_TABLE_BITS
@@ -223,7 +229,7 @@ SGE_Driver_ResampleCore:
 	MLA	ip, r9, ip, r8
 	EOR	ip, lr, ip, ror #0x18     @ Back to signed and rotate to correct sample bits
 #endif
-	STRB	ip, [r1, #SGE_RESAMPLE_BUFSIZE]
+	STRB	ip, [r1, #SGE_RESAMPLE_BUFSIZE*SGE_RESAMPLE_NBUFFERS]
 	MOV	ip, ip, ror #0x10
 	STRB	ip, [r1], #0x01
 10:	ADDS	r0, r0, r0, lsl #0x10     @ Phase += Rate?
