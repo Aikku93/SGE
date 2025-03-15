@@ -28,8 +28,10 @@ SGE_Driver_GetWorkAreaSize:
 	MUL	r1, r2                             @ BufCnt *= BufLen -> r1
 	ADD	r0, #SGE_DRIVER_HEADER_SIZE
 #ifdef __GBA__
+# if (SGE_SELFMANAGED_HW && !defined(SGE_RESAMPLE_TARGET))
 	LSL	r2, r1, #0x20-4                    @ GBA: BufCnt*BufLen must be a multiple of 16 samples
 	BNE	.LExit_Error
+# endif
 	LSL	r1, #0x00+1+SGE_USE_OVERSAMPLING   @      8bit samples
 #else
 	LSL	r2, r1, #0x20-1                    @ NDS: BufCnt*BufLen must be a multiple of 2 samples
@@ -37,6 +39,10 @@ SGE_Driver_GetWorkAreaSize:
 	LSL	r1, #0x01+1+SGE_USE_OVERSAMPLING   @      16bit samples
 #endif
 	ADD	r0, r1                             @ Size += BufSize
+#if (defined(__GBA__) && defined(SGE_RESAMPLE_TARGET))
+	LDR	r1, =0x01*SGE_RESAMPLE_BUFSIZE * 2 @ Add resampled buffers
+	ADD	r0, r1
+#endif
 	BX	lr
 
 .LExit_Error:

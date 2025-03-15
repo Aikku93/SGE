@@ -29,6 +29,10 @@ SGE_Driver_Init:
 	BCC	.LExit_Error
 	LSR	r4, r2, #0x10
 	BNE	.LExit_Error
+#ifdef SGE_RESAMPLE_TARGET
+	LSR	r4, #SGE_RESAMPLE_LOG2TARGET
+	BNE	.LExit_Error
+#endif
 	LDR	r4, [sp, #0x0C]             @ MixBuf -> r4
 	CMP	r3, #0x02                   @ Invalid BufCnt?
 	BCC	.LExit_Error
@@ -45,7 +49,7 @@ SGE_Driver_Init:
 	STRH	r2, [r0, #0x0C]             @ Store RateHz
 	STRH	r4, [r0, #0x0E]             @ Store BufLen
 #ifdef __GBA__
-# if SGE_SELFMANAGED_HW
+# if (SGE_SELFMANAGED_HW && !defined(SGE_RESAMPLE_TARGET))
 	MUL	r3, r4
 	LSL	r3, #(32-4)                 @ Ensure (BufLen*BufCnt) % 16 == 0
 	BNE	.LExit_Error

@@ -25,27 +25,42 @@ SGE_Driver_Resume:
 	MUL	r2, r3
 	LDRB	r3, [r4, #0x09]               @ BufCnt -> r3
 	ADD	r0, r2                        @ Seek to OutBuf - Done!
-	LDRH	r2, [r4, #0x0E]               @ BufLen -> r2
+	LDRH	r5, [r4, #0x0E]               @ BufLen -> r2
 	SUB	r1, r3, #0x01                 @ BufIdxR = BufCnt-1
-#ifdef __GBA__
+#if (defined(__GBA__) && !defined(SGE_RESAMPLE_TARGET))
 	STRB	r1, [r4, #0x08]               @  This forces a reset on the next Sync().
 #endif
 	STRB	r1, [r4, #0x0B]               @ BufIdxW = BufCnt-1
-0:	MUL	r2, r3                        @ memset(OutBuf, 0, sizeof(Sample_t[2])*BufCnt*BufLen)
+#if (defined(__GBA__) && defined(SGE_RESAMPLE_TARGET))
+	MOV	r1, #0x01
+	STRB	r1, [r4, #0x08]               @  <- Force a reset on the next Sync()
+#endif
+0:	MUL	r5, r3                        @ memset(OutBuf, 0, sizeof(Sample_t[2])*BufCnt*BufLen)
 	MOV	r1, #0x00
 	@MOV	r0, r0
-#ifdef __GBA__
-	LSL	r2, #0x00+1+SGE_USE_OVERSAMPLING
+#if (defined(__GBA__) && defined(SGE_RESAMPLE_TARGET))
+	STR	r1, [r4, #0x18+SGE_PLATFORM_RESAMPLE_SAMP_OFFS]
+	LDR	r2, =0x01*SGE_RESAMPLE_BUFSIZE * 2
+	LSL	r5, #0x00+1
+	ADD	r2, r5
 #else
-	LSL	r2, #0x01+1+SGE_USE_OVERSAMPLING
-#endif
+# ifdef __GBA__
+	LSL	r2, r5, #0x00+1+SGE_USE_OVERSAMPLING
+# else
+	LSL	r2, r5, #0x01+1+SGE_USE_OVERSAMPLING
+# endif
 	LSR	r5, r2, #0x01                 @ RightBufOffs -> r5
+#endif
 	BL	memset
 #if (defined(__NDS__) && __NDS__ == 9)
 	PUSH	{r0}
 	LSL	r1, r5, #0x01
 	BL	DC_FlushRange
 	POP	{r0}
+#endif
+#if (defined(__GBA__) && defined(SGE_RESAMPLE_TARGET))
+	ADD	r0, r5                        @ Seek to resampled buffer and set new buffer stride
+	LDR	r5, =0x01 * SGE_RESAMPLE_BUFSIZE
 #endif
 
 .LSetupHardware:
@@ -115,9 +130,13 @@ SGE_Driver_Resume:
 	LSR	r0, #0x01
 # endif
 # if SGE_SELFMANAGED_HW
+#  if defined(SGE_RESAMPLE_TARGET)
+	LDR	r1, =(65536 - SGE_RESAMPLE_PERIOD) | (REG_TIMER_H_ENABLE << 16)
+#  else
 	MOV	r1, #REG_TIMER_H_ENABLE+1                  @ Start timer and return Period
 	LSL	r1, #0x10
 	SUB	r1, r0
+#  endif
 	STR	r1, [r5, #REG_TIMER(SGE_HWTIMER_IDX) - REG_DMASAD(3)]
 # endif
 #else

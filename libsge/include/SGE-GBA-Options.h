@@ -102,13 +102,26 @@
 #define SGE_MIXER_VOLFRACBITS   3 //! Volume bits to preserve in mix (maximum 7) - NOTE: Max voices = 2^(7-x)
 #define SGE_USE_VOLSUBDIV       1 //! 0 = No chunk subdivision for volume, 1 = Subdivide mix chunk as needed
 #define SGE_FAST_INTERPOLATE    1 //! 0 = Full-precision interpolation, 1 = Reduced precision interpolation
-#define SGE_USE_OVERSAMPLING    1 //! 0 = Direct signal, 1 = Linearly interpolate to twice the sampling rate
+#define SGE_USE_OVERSAMPLING    0 //! 0 = Direct signal, 1 = Linearly interpolate to twice the sampling rate
 #define SGE_USE_CLIPPING        1 //! 0 = Don't clip, 1 = Clip output signal
 #define SGE_PCM8_MONO_UNROLL    4 //! 1 = No unroll, M = Unroll M iterations (must be a multiple of 4)
 #define SGE_PCM8_STEREO_UNROLL  4 //! 1 = No unroll, M = Unroll M iterations (must be a multiple of 2)
 #define SGE_VOLSUBDIV_MINLENGTH    32 //! Suggested value: 32
 #define SGE_VOLSUBDIV_LOG2RATIO     2 //! Suggested value: 2
 #define SGE_VOLSUBDIV_LOG2MAXSUBDIV 3 //! Suggested value: 2 or 3
+
+//! Resampling-specific compilation options
+//! Notes:
+//!  -Defining RESAMPLE_TARGET enables resampling.
+//!  -The resampled buffer is always double-buffered; RESAMPLE_BUFSIZE
+//!   then refers to the size of the two buffers combined.
+//!  -Only SGE_RESAMPLE_LOG2TARGET and SGE_RESAMPLE_BUFSIZE should be
+//!   changed; the other definitions must remain as they are.
+#define SGE_RESAMPLE_LOG2TARGET  15
+#define SGE_RESAMPLE_TARGET     (1 << SGE_RESAMPLE_LOG2TARGET)
+#define SGE_RESAMPLE_BUFSIZE    (272 * 2) //! 544 is approximately 60Hz @ 32768Hz
+#define SGE_RESAMPLE_LOG2PERIOD (24 - SGE_RESAMPLE_LOG2TARGET)
+#define SGE_RESAMPLE_PERIOD     (1 << SGE_RESAMPLE_LOG2PERIOD)
 
 //! Reverb-specific compilation options
 //! Notes:
@@ -183,6 +196,17 @@
 #endif
 #if (SGE_ALLPASS_BITS < 7 || SGE_ALLPASS_BITS > 14)
 # error "SGE_ALLPASS_BITS must be 7 ~ 14."
+#endif
+#if (SGE_RESAMPLE_LOG2TARGET < 13 || SGE_RESAMPLE_LOG2TARGET > 16)
+# error "SGE_RESAMPLE_LOG2TARGET must be 13 ~ 16."
+#endif
+#ifdef SGE_RESAMPLE_TARGET
+# if SGE_USE_OVERSAMPLING
+#  error "SGE_USE_OVERSAMPLING does not support SGE_RESAMPLE_TARGET."
+# endif
+# if ((SGE_RESAMPLE_BUFSIZE & 15) != 0)
+#  error "SGE_RESAMPLE_BUFSIZE must be a multiple of 16."
+# endif
 #endif
 
 /************************************************/
