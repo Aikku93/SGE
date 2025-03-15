@@ -203,8 +203,8 @@
 # if SGE_USE_OVERSAMPLING
 #  error "SGE_USE_OVERSAMPLING does not support SGE_RESAMPLE_TARGET."
 # endif
-# if ((SGE_RESAMPLE_BUFSIZE & 15) != 0)
-#  error "SGE_RESAMPLE_BUFSIZE must be a multiple of 16."
+# if (((SGE_RESAMPLE_BUFSIZE*SGE_RESAMPLE_NBUFFERS) & 15) != 0)
+#  error "SGE_RESAMPLE_BUFSIZE*SGE_RESAMPLE_NBUFFERS must be a multiple of 16."
 # endif
 #endif
 
