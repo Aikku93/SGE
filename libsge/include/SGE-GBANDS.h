@@ -56,7 +56,9 @@ struct __attribute__((aligned(__SIZEOF_POINTER__))) SGE_Driver_Platform_t {
 #ifdef __NDS__
 	void *StreamToken;
 #endif
-#if SGE_USE_OVERSAMPLING
+#if defined(SGE_RESAMPLE_TARGET)
+	uint32_t Offs;
+#elif if SGE_USE_OVERSAMPLING
 	uint16_t TapL, TapR;
 #endif
 	int x[0];
