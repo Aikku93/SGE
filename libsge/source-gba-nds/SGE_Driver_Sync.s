@@ -69,16 +69,60 @@ SGE_Driver_Sync:
 	LSL	r0, r1, #0x10             @ Phase = ((SampOffs % MixPeriod) << BITS) / MixPeriod -> r0
 	MOV	r1, r6
 	BL	__aeabi_uidiv
-	LDRB	r2, [r4, #0x0A]           @ VoxCnt -> r2
-	MOV	r3, #SGE_VOX_SIZE         @ Seek past voices to SrcBuffer -> r2
-	MUL	r2, r3
-	ADD	r2, r4
-	ADD	r2, #SGE_DRIVER_HEADER_SIZE
-	LSL	r1, r7, #0x00+1           @ Seek to ResampleBuffer -> r1
-	ADD	r1, r2
 	LDRH	r6, [r4, #0x0C]           @ Rate = RateHz * 2^16/ResampleRateHz -> r6
+	LDR	r3, =SGE_RESAMPLE_BUFSIZE @ N = ResampleBufSize -> r3
 # if (SGE_RESAMPLE_LOG2TARGET < 16)
 	LSL	r6, #(16 - SGE_RESAMPLE_LOG2TARGET)
+# endif
+	LDRB	r1, [r4, #0x0A]           @ VoxCnt -> r1
+	MOV	r2, #SGE_VOX_SIZE         @ Seek past voices to SrcBuffer -> r1
+	MUL	r1, r2
+	ADD	r1, r4
+	ADD	r1, #SGE_DRIVER_HEADER_SIZE
+	LDRB	r4, [r4, #0x08]           @ Seek OutBuffer -> r4
+	SUB	r4, #0x01                 @ Write to the buffer that was last played
+# if (SGE_RESAMPLE_NBUFFERS == 2)
+	AND	r4, r3
+# else
+	BCS	0f
+	ADD	r4, #SGE_RESAMPLE_NBUFFERS
+0:	MUL	r4, r3
+# endif
+	ADD	r4, r1
+	ADD	r4, r7
+	ADD	r4, r7
+	MOV	r2, r3                    @ InputSamples = N*Rate + Phase -> r2
+	MUL	r2, r6
+	ADD	r2, r0
+	LSR	r2, #0x10
+	LSL	r0, #0x10                 @ Rate | Phase<<16 -> r6
+	ORR	r6, r0
+	ADD	r2, r5                    @ EndOffs = Offs + InputSamples -> r2
+	PUSH	{r1,r5}                   @ Stash SrcBuffer and Offs for reading old samples
+	ADD	r5, r1                    @ SrcL = SrcBuffer + Offs -> r5
+	CMP	r2, r7                    @ EndOffs <= BufSize?
+	BLS	2f                        @  Y: N = ResampleBufSize
+1:	SUB	r2, r5, r1                @  N: N = Ceiling[(((BufSize-Offs) << BITS) - Phase) / Rate]
+	SUB	r2, r7, r2
+	LSL	r2, #0x10
+	LSR	r3, r6, #0x10
+	SUB	r2, r3
+	SUB	r0, r2, #0x01
+	LSL	r1, r6, #0x10
+	LSR	r1, #0x10
+	BL	__aeabi_uidiv
+	ADD	r3, r0, #0x01
+2:	LDR	r0, =SGE_RESAMPLE_BUFSIZE
+	SUB	r0, r3                    @ NextN(=ResampleBufSize-ThisN) | ThisN<<16
+	LSL	r3, #0x10
+	ORR	r3, r0
+# if SINC_TABLE_BITS
+	LDR	r1, =SGE_Driver_ResampleLUT
+	MOV	r2, #0xFF
+# else
+	MOV	r1, #0x80                 @ SignMask -> r2
+	LSL	r2, r1, #0x10             @ We use unsigned lerp due to potential overflow issues
+	ORR	r2, r1
 # endif
 ASM_ALIGN(4)
 	BX	pc
@@ -89,102 +133,34 @@ ASM_ALIGN(4)
 
 #ifdef SGE_RESAMPLE_TARGET
 ASM_MODE_ARM
-.LResampleStart_ARM:
-#if SINC_TABLE_BITS
+	LDMFD	sp!, {ip,lr}              @ SrcBuffer -> ip, Offs -> lr
+	SUBS	lr, lr, #0x01             @ Pre-seek first old sample
+	ADDCC	lr, lr, r7
+# if SINC_TABLE_BITS
 	STMFD	sp!, {r8-fp}
-#else
-	STMFD	sp!, {r8-r9}
-#endif
-	LDRB	ip, [r4, #0x08]           @ Seek OutBuffer as needed
-	ORR	r0, r6, r0, lsl #0x10     @ Rate | Phase<<16 -> r0
-	MOV	r3, #SGE_RESAMPLE_BUFSIZE
-#if (SGE_RESAMPLE_NBUFFERS == 2)
-	CMP	ip, #0x00
-	ADDEQ	r1, r1, #0x01*SGE_RESAMPLE_BUFSIZE
-#else
-	SUBS	ip, ip, #0x01             @ Write to the buffer that was last played
-	ADDCC	ip, ip, #SGE_RESAMPLE_NBUFFERS
-	MLA	r1, r3, ip, r1
-#endif
-	SUBS	ip, r5, #0x01
-	ADDCC	ip, ip, r7
-#if SINC_TABLE_BITS
-	ADD	lr, r2, r7                @ &SrcR -> lr
-	LDRSB	fp, [r2, ip]              @ Load older samples -> r9,sl,fp
-	LDRSB	r8, [lr, ip]
+	ADD	r0, ip, r7                @ &SrcR -> r0
+	LDRSB	fp, [ip, lr]              @ Load older samples -> r9,sl,fp
+	LDRSB	r8, [r0, lr]
 	ADD	fp, fp, r8, lsl #0x10
-	SUBS	ip, ip, #0x01
-	ADDCC	ip, ip, r7
-	LDRSB	sl, [r2, ip]
-	LDRSB	r8, [lr, ip]
+	SUBS	lr, lr, #0x01
+	ADDCC	lr, lr, r7
+	LDRSB	sl, [ip, lr]
+	LDRSB	r8, [r0, lr]
 	ADD	sl, sl, r8, lsl #0x10
-	SUBS	ip, ip, #0x01
-	ADDCC	ip, ip, r7
-	LDRSB	r9, [r2, ip]
-	LDRSB	r8, [lr, ip]
+	SUBS	lr, lr, #0x01
+	ADDCC	lr, lr, r7
+	LDRSB	r9, [ip, lr]
+	LDRSB	r8, [r0, lr]
 	ADD	r9, r9, r8, lsl #0x10
-#else
-	LDRB	r8, [ip, r2]!             @ Prepare OldL,OldR for interpolation loop
-	LDRB	ip, [ip, r7]
-	EOR	r8, r8, #0x80
-	EOR	ip, ip, #0x80
-	ORR	r8, r8, ip, lsl #0x10
-	MOV	r8, r8, lsl #0x08
-	SUB	r8, r8, r9, lsl #0x08
-#endif
-
-@ r0:  Rate | Phase<<16
-@ r1: &OutBuffer
-@ r2: &SrcBuffer
-@ r3:  OutSampleRem | N<<16
-@ r4: &Driver
-@ r5:  SrcSampleOffs
-@ r6: &SrcL
-@ r7:  BufSize(=BfCnt*BfLen)
-@ ip: [Temp]
-@ lr:  SignMask
-@ Without sinc interpolation:
-@  r8: (OldL  | OldR) << 8
-@  r9: (StepL | StepR)
-@ With sinc interpolation:
-@  r2: &SincTable
-@  r4:  FFh
-@  r5: [Temp]
-@  r8:  x[-3] (L|R)
-@  r9:  x[-2] (L|R)
-@  sl:  x[-1] (L|R)
-@  fp:  x[ 0] (L|R)
-@  lr: [Temp]
-
-.LResampleLoop:
-	MOV	ip, r0, lsr #0x10         @ Phase -> ip
-	BIC	lr, r0, ip, lsl #0x10     @ Rate -> lr
-	MLA	r6, lr, r3, ip            @ InputSamples = N*Rate + Phase -> r6
-	ADD	r6, r5, r6, lsr #0x10     @ EndOffs = Offs+InputSamples -> r6
-	CMP	r7, r6                    @ EndOffs >= BufSize (via BufSize <= EndOffs)?
-	ADD	r6, r2, r5                @ SrcL = SrcBuffer + Offs -> r6
-	ADDCS	r3, r3, r3, lsl #0x10     @  N: N = OutSampleRem
-	BCS	2f
-1:	STMFD	sp!, {r0-r3}              @  Y: N = Ceiling[(((BufSize-Offs) << BITS) - Phase) / Rate]
-	SUB	r0, r7, r5
-	RSC	r0, ip, r0, lsl #0x10
-	MOV	r1, lr
-	BL	__aeabi_uidiv
-	ADD	ip, r0, #0x01
-	MOV	r5, #0x00                 @ Wrap Offs = 0 for next iteration. Note that we never actually advance
-	LDMFD	sp!, {r0-r3}              @ it, based on the assumption that we only have two iterations at most
-	ADD	r3, r3, ip, lsl #0x10
-2:	SUB	r3, r3, r3, lsr #0x10     @ OutSampleRem -= N
-#if SINC_TABLE_BITS
-	STMFD	sp!, {r2,r4-r5}
-	LDR	r2, =SGE_Driver_ResampleLUT
-	MOV	r4, #0xFF
-#else
-	MOV	lr, #0x80                 @ Build SignMask -> lr
-	ORR	lr, lr, lr, lsl #0x10     @ We use unsigned lerp due to potential overflow issues
-#endif
+# else
+	LDRB	r0, [ip, lr]!             @ Prepare OldL,OldR for interpolation loop
+	LDRB	r1, [ip, r7]
+	ORR	r0, r0, r1, lsl #0x10
+	EOR	r0, r0, r2
+	MOV	r0, r0, lsl #0x08
+	SUB	r0, r0, r1, lsl #0x08
+# endif
 	LDR	pc, =SGE_Driver_ResampleCore
-ASM_MODE_THUMB
 #endif
 
 ASM_FUNC_END(SGE_Driver_Sync)
@@ -195,6 +171,26 @@ ASM_FUNC_END(SGE_Driver_Sync)
 
 ASM_FUNC_BEG(SGE_Driver_ResampleCore, ASM_FUNCSECT_FAST;ASM_MODE_ARM)
 
+@ r3:  NextN | ThisN<<16
+@ r4: &OutBuffer
+@ r5: &SrcL
+@ r6:  Rate | Phase<<16
+@ r7:  BufSize(=BfCnt*BfLen)
+@ ip: [Temp]
+@ Without sinc interpolation:
+@  r0: (OldL  | OldR) << 8
+@  r1: (StepL | StepR)
+@  r2:  SignMask
+@ With sinc interpolation:
+@  r0: [Temp]
+@  r1: &SincTable
+@  r2:  FFh
+@  r8:  x[-3] (L|R)
+@  r9:  x[-2] (L|R)
+@  sl:  x[-1] (L|R)
+@  fp:  x[ 0] (L|R)
+@  lr: [Temp]
+
 SGE_Driver_ResampleCore:
 0:	SUBS	r3, r3, #0x01<<16         @ --N?
 	BCC	2f
@@ -202,49 +198,44 @@ SGE_Driver_ResampleCore:
 	MOV	r8, r9
 	MOV	r9, sl
 	MOV	sl, fp
-	LDRSB	ip, [r6, r7]              @ NewL,NewR -> fp,ip
-	LDRSB	fp, [r6], #0x01
+	LDRSB	ip, [r5, r7]              @ NewL,NewR -> fp,ip
+	LDRSB	fp, [r5], #0x01
 	ADD	fp, fp, ip, lsl #0x10     @ NewL|NewR -> fp
-1:	MOV	r5, r0, lsr #0x20-SINC_TABLE_BITS
-	LDR	r5, [r2, r5, lsl #0x02]   @ Convolve sample (order of signs: -++-)
-	ANDS	ip, r4, r5, lsr #0x00
+1:	MOV	r0, r6, lsr #0x20-SINC_TABLE_BITS
+	LDR	r0, [r1, r0, lsl #0x02]   @ Convolve sample (order of signs: -++-)
+	ANDS	ip, r2, r0, lsr #0x00
 	MULNE	ip, r8, ip
-	AND	lr, r4, r5, lsr #0x08
+	ANDS	lr, r2, r0, lsr #0x18
+	MLANE	ip, fp, lr, ip
+	AND	lr, r2, r0, lsr #0x08
 	MUL	lr, r9, lr
 	RSB	ip, ip, lr
-	AND	lr, r4, r5, lsr #0x10
+	AND	lr, r2, r0, lsr #0x10
 	MLA	ip, sl, lr, ip
-	ANDS	lr, r4, r5, lsr #0x18
-	MULNE	lr, fp, lr
-	SUB	ip, ip, lr
 	MOV	ip, ip, ror #0x18         @ Rotate to right sample bits
 #else
-	ADD	r8, r8, r9, lsl #0x08     @ Step to next sample
-	LDRB	ip, [r6, r7]              @ NewL,NewR -> r9,ip
-	LDRB	r9, [r6], #0x01
-	ORR	r9, r9, ip, lsl #0x10     @ NewL|NewR -> r9
-	EOR	r9, r9, lr                @ Convert to unsigned
-	SUB	r9, r9, r8, lsr #0x08     @ StepL|StepR -> r9
-1:	MOV	ip, r0, lsr #0x20-8       @ Out = Old + Step*Phase -> ip
-	MLA	ip, r9, ip, r8
-	EOR	ip, lr, ip, ror #0x18     @ Back to signed and rotate to correct sample bits
+	ADD	r0, r0, r1, lsl #0x08     @ Step to next sample
+	LDRB	ip, [r5, r7]              @ NewL,NewR -> r1,ip
+	LDRB	r1, [r5], #0x01
+	ORR	r1, r1, ip, lsl #0x10     @ NewL|NewR -> r1
+	EOR	r1, r1, r2                @ Convert to unsigned
+	SUB	r1, r1, r0, lsr #0x08     @ StepL|StepR -> r1
+1:	MOV	ip, r6, lsr #0x20-8       @ Out = Old + Step*Phase -> ip
+	MLA	ip, r1, ip, r0
+	EOR	ip, r2, ip, ror #0x18     @ Back to signed and rotate to correct sample bits
 #endif
-	STRB	ip, [r1, #SGE_RESAMPLE_BUFSIZE*SGE_RESAMPLE_NBUFFERS]
+	STRB	ip, [r4, #SGE_RESAMPLE_BUFSIZE*SGE_RESAMPLE_NBUFFERS]
 	MOV	ip, ip, ror #0x10
-	STRB	ip, [r1], #0x01
-10:	ADDS	r0, r0, r0, lsl #0x10     @ Phase += Rate?
+	STRB	ip, [r4], #0x01
+10:	ADDS	r6, r6, r6, lsl #0x10     @ Phase += Rate?
 	BCS	0b
 11:	SUBS	r3, r3, #0x01<<16         @ --N?
 	BCS	1b
-2:	ADDS	r3, r3, #0x01<<16         @ Restore OutSampleRem. More samples remaining?
-#if SINC_TABLE_BITS
-	LDMFD	sp!, {r2,r4-r5}
-#endif
-	LDRNE	pc, =.LResampleLoop
+2:	MOVS	r3, r3, lsl #0x10         @ More samples remaining?
+	SUBNE	r5, r5, r7                @  Rewind SrcBuffer (we only restart when wrapping around, and only wrap once)
+	BNE	0b
 #if SINC_TABLE_BITS
 	LDMFD	sp!, {r8-fp}
-#else
-	LDMFD	sp!, {r8-r9}
 #endif
 	LDMFD	sp!, {r4-r7,lr}
 	BX	lr
