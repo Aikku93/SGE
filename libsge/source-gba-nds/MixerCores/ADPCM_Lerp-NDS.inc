@@ -47,8 +47,8 @@ ASM_MODE_ARM
 	ADDS	r7, r7, sl, lsl #(31-15) @ Position += Rate?
 	BPL	1b
 #else
-	MOV	r5, r6, lsr #0x10
-	BIC	r8, r6, r5, lsl #0x10
+	MOV	r8, r6, lsr #0x10
+	BIC	r5, r6, r8, lsl #0x10
 	MOVS	ip, r7, lsr #0x20-8
 	MULNE	ip, r0, ip
 	ADDS	ip, r1, ip, asr #0x08+1
@@ -105,8 +105,8 @@ ASM_MODE_ARM
 	SMLABT	r8, ip, r6, r8
 	STMIA	r9!, {r5,r8}
 #else
-	MOV	r5, r6, lsr #0x10        @ Mix
-	BIC	r8, r6, r5, lsl #0x10
+	MOV	r8, r6, lsr #0x10        @ Mix
+	BIC	r5, r6, r8, lsl #0x10
 	MOVS	ip, r7, lsr #(15-8)      @ <- We either have a 16bit Rn (3c MUL) or MOV + 8bit Rn (3c all up).
 	MULNE	ip, r0, ip               @    With the latter, we can also set flags, so we use that.
 	ADDS	ip, r1, ip, asr #0x08+1

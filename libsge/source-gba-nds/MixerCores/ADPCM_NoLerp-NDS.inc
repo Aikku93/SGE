@@ -40,8 +40,8 @@ ASM_MODE_ARM
 	SMLABT	r8, r1, r6, r8
 	STMIA	r9!, {r5,r8}
 #else
-	MOV	r5, r6, lsr #0x10
-	BIC	r8, r6, r5, lsl #0x10
+	MOV	r8, r6, lsr #0x10
+	BIC	r5, r6, r8, lsl #0x10
 	LDR	ip, [r9], #0x04
 	MLA	r5, r1, r5, ip
 	LDR	ip, [r9], #0x04
@@ -84,8 +84,8 @@ ASM_MODE_ARM
 	SMLABT	r8, r1, r6, r8
 	STMIA	r9!, {r5,r8}
 #else
-	MOV	r5, r6, lsr #0x10        @ Mix
-	BIC	r8, r6, r5, lsl #0x10
+	MOV	r8, r6, lsr #0x10        @ Mix
+	BIC	r5, r6, r8, lsl #0x10
 	LDR	ip, [r9], #0x04
 	MLA	r5, r1, r5, ip
 	LDR	ip, [r9], #0x04

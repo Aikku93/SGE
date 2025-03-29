@@ -134,7 +134,7 @@ ASM_MODE_ARM
 .macro PCM8_Stereo_RateGT_NoLerp_Mix RdL, RdR=0, SrcA, SrcB=0
 #if (__NDS__ == 7)
 	SUBS	r2, \SrcA, #0x8000                 @ <- This keeps the L sample as "garbage" bits, but
-	MLANE	\RdL, r2, r3, \RdL                 @    hopefully is not noticeable :/
+	MLANE	\RdL, r2, r6, \RdL                 @    hopefully is not noticeable :/
 .if \SrcB != 0
 	SUBS	r2, \SrcB, #0x8000
 	MLANE	\RdR, r2, r3, \RdR
@@ -170,11 +170,17 @@ ASM_MODE_ARM
 	PCM8_Stereo_RateGT_NoLerp_Fetch r8
 	LDMIA	r9, {r5,fp,ip,lr}                  @ Wet -> r5,fp,ip,lr
 # if (__NDS__ == 7)
-	PCM8_Stereo_RateGT_NoLerp_Mix fp,lr, r1,r8 @ Mix right samples
+	SUBS	r2, r1, #0x8000                    @ Mix right samples
+	MLANE	fp, r2, r3, fp                     @ <- This keeps the L sample as "garbage" bits, but
+	SUBS	r2, r8, #0x8000                    @    hopefully is not noticeable :/
+	MLANE	lr, r2, r3, lr
 	MOV	r2, #0xFF00                        @ Shift up to the left sample
 	AND	r1, r2, r1, lsl #0x08
 	AND	r8, r2, r8, lsl #0x08
-	PCM8_Stereo_RateGT_NoLerp_Mix r5,ip, r1,r8 @ Mix left samples
+	SUBS	r2, r1, #0x8000                    @ Mix left samples
+	MLANE	r5, r2, r6, r5
+	SUBS	r2, r8, #0x8000
+	MLANE	ip, r2, r6, ip
 # else
 	PCM8_Stereo_RateGT_NoLerp_Mix r5,fp, r1
 	PCM8_Stereo_RateGT_NoLerp_Mix ip,lr, r8
@@ -196,9 +202,11 @@ ASM_MODE_ARM
 20:	PCM8_Stereo_RateGT_NoLerp_Fetch r1         @ Dry -> r1
 	LDMIA	r9, {r5,fp}                        @ Wet -> r5,fp
 #if (__NDS__ == 7)
-	PCM8_Stereo_RateGT_NoLerp_Mix fp,, r1,     @ Mix right sample
+	SUBS	r2, r1, #0x8000                    @ Mix right sample
+	MLANE	fp, r2, r3, fp
 	AND	r1, ip, r1, lsl #0x08              @ Shift up to the left sample
-	PCM8_Stereo_RateGT_NoLerp_Mix r5,, r1,     @ Mix left sample
+	SUBS	r2, r1, #0x8000                    @ Mix left sample
+	MLANE	r5, r2, r6, r5
 #else
 	PCM8_Stereo_RateGT_NoLerp_Mix r5,fp, r1
 #endif
