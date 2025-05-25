@@ -111,7 +111,7 @@ SGE_Driver_Resume:
 1:	STR	r3, [r2, #REG_TIMER(SGE_HWTIMER_IDX) - REG_SOUNDFIFO_A] @ Stop timer
 1:	MOV	r1, r2
 	ADD	r1, #REG_DMASAD(1) - REG_SOUNDFIFO_A
-	MOV	r3, #0xB6                                  @ Cnt = DST_INC | SRC_INC | REPEAT | DATA32 | MODE_SOUNDFIFO | ENABLE
+	MOV	r3, #0xB7                                  @ Cnt = DST_INC | SRC_FIXED | REPEAT | DATA32 | MODE_SOUNDFIFO | ENABLE
 	LSL	r3, #0x18
 	STMIA	r1!, {r0,r2,r3}                            @ DMA1SAD = LeftBuf,  DMA1DAD = FIFO_A, DMA1CNT = Cnt
 	ADD	r0, r5
