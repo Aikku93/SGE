@@ -377,7 +377,7 @@ static int MML_Command_Expression(struct MML_t *MML) {
 /************************************************/
 
 static int MML_Command_Panning(struct MML_t *MML) {
-	int Result = MML_ParseController(MML, MML_CMD_PANNING, 8, -63, +63, 1.0, 1, 1);
+	int Result = MML_ParseController(MML, MML_CMD_PANNING, 8, -63, +63, 63.0, 1, 1);
 	if(Result == MML_ERROR) {
 		MML_AppendErrorContext(MML, "While parsing panning controller:");
 	}
