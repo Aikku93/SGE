@@ -278,7 +278,7 @@ static int Track_ReadController(
 	uint32_t Value,
 	uint8_t  Is16BitCtrl
 ) {
-	uint16_t Target = (Value >> 1) + 1;
+	uint16_t Target = Value >> 1;
 	if(Ctrl) {
 		if(Is16BitCtrl) Ctrl->Ctrl16.Target = Target;
 		else            Ctrl->Ctrl8.Target  = (uint8_t)Target;
@@ -554,7 +554,7 @@ BEGIN_COMMAND(8h) {
 //! 9h: Velocity
 BEGIN_COMMAND(9h) {
 	(void)AuditData;
-	int Result = Track_ReadController(MML, (union SGE_CtrlUnion_t*)(&Track->Vel), Track, Track_ReadByte(Track), 0);
+	int Result = Track_ReadController(MML, (union SGE_CtrlUnion_t*)(&Track->Vel), Track, Track_ReadByte(Track) + (1<<1), 0);
 	if(Result == MML_ERROR) {
 		MML_AppendErrorContext(MML, "Audit: While reading velocity control command (9h):");
 	}
@@ -564,7 +564,7 @@ BEGIN_COMMAND(9h) {
 //! Ah: Volume
 BEGIN_COMMAND(Ah) {
 	(void)AuditData;
-	int Result = Track_ReadController(MML, (union SGE_CtrlUnion_t*)(&Track->Vol), Track, Track_ReadByte(Track), 0);
+	int Result = Track_ReadController(MML, (union SGE_CtrlUnion_t*)(&Track->Vol), Track, Track_ReadByte(Track) + (1<<1), 0);
 	if(Result == MML_ERROR) {
 		MML_AppendErrorContext(MML, "Audit: While reading volume control command (Ah):");
 	}
@@ -574,7 +574,7 @@ BEGIN_COMMAND(Ah) {
 //! Bh: Expression
 BEGIN_COMMAND(Bh) {
 	(void)AuditData;
-	int Result = Track_ReadController(MML, (union SGE_CtrlUnion_t*)(&Track->Exp), Track, Track_ReadByte(Track), 0);
+	int Result = Track_ReadController(MML, (union SGE_CtrlUnion_t*)(&Track->Exp), Track, Track_ReadByte(Track) + (1<<1), 0);
 	if(Result == MML_ERROR) {
 		MML_AppendErrorContext(MML, "Audit: While reading expression control command (Bh):");
 	}
@@ -584,7 +584,7 @@ BEGIN_COMMAND(Bh) {
 //! Ch: Panning
 BEGIN_COMMAND(Ch) {
 	(void)AuditData;
-	int Result = Track_ReadController(MML, (union SGE_CtrlUnion_t*)(&Track->Pan), Track, Track_ReadByte(Track), 0);
+	int Result = Track_ReadController(MML, (union SGE_CtrlUnion_t*)(&Track->Pan), Track, Track_ReadByte(Track) + (1<<1), 0);
 	if(Result == MML_ERROR) {
 		MML_AppendErrorContext(MML, "Audit: While reading panning control command (Ch):");
 	}
@@ -617,7 +617,7 @@ BEGIN_COMMAND(Eh1h) {
 	return MML_OK;
 }
 
-//! Fh,2h: RepeatStart
+//! Eh,2h: RepeatStart
 BEGIN_COMMAND(Eh2h) {
 	(void)AuditData;
 	uint8_t Depth = Track->StackDepth;
@@ -632,11 +632,51 @@ BEGIN_COMMAND(Eh2h) {
 	return MML_OK;
 }
 
-//! Eh,3h..Fh: Unallocated
-UNALLOCATED_COMMAND(Eh3h);
-UNALLOCATED_COMMAND(Eh4h);
-UNALLOCATED_COMMAND(Eh5h);
-UNALLOCATED_COMMAND(Eh6h);
+//! Eh,3h: PitchBendSt1
+BEGIN_COMMAND(Eh3h) {
+	(void)AuditData;
+	uint32_t Value = (Track_ReadNybble(Track) + 128 - 8) << 8 | 0;
+	int Result = Track_ReadController(MML, (union SGE_CtrlUnion_t*)(&Track->Bnd), Track, Value, 1);
+	if(Result == MML_ERROR) {
+		MML_AppendErrorContext(MML, "Audit: While reading pitch-bend control command (Eh,3h):");
+	}
+	return Result;
+}
+
+//! Eh,4h: PitchBendSt1Ramp
+BEGIN_COMMAND(Eh4h) {
+	(void)AuditData;
+	uint32_t Value = (Track_ReadNybble(Track) + 128 - 8) << 8 | 1;
+	int Result = Track_ReadController(MML, (union SGE_CtrlUnion_t*)(&Track->Bnd), Track, Value, 1);
+	if(Result == MML_ERROR) {
+		MML_AppendErrorContext(MML, "Audit: While reading pitch-bend control command (Eh,4h):");
+	}
+	return Result;
+}
+
+//! Eh,5h: PitchBendSt2
+BEGIN_COMMAND(Eh5h) {
+	(void)AuditData;
+	uint32_t Value = Track_ReadByte(Track) << 8 | 0;
+	int Result = Track_ReadController(MML, (union SGE_CtrlUnion_t*)(&Track->Bnd), Track, Value, 1);
+	if(Result == MML_ERROR) {
+		MML_AppendErrorContext(MML, "Audit: While reading pitch-bend control command (Eh,5h):");
+	}
+	return Result;
+}
+
+//! Eh,6h: PitchBendSt2Ramp
+BEGIN_COMMAND(Eh6h) {
+	(void)AuditData;
+	uint32_t Value = Track_ReadByte(Track) << 8 | 1;
+	int Result = Track_ReadController(MML, (union SGE_CtrlUnion_t*)(&Track->Bnd), Track, Value, 1);
+	if(Result == MML_ERROR) {
+		MML_AppendErrorContext(MML, "Audit: While reading pitch-bend control command (Eh,6h):");
+	}
+	return Result;
+}
+
+//! Eh,7h..Fh: Unallocated
 UNALLOCATED_COMMAND(Eh7h);
 UNALLOCATED_COMMAND(Eh8h);
 UNALLOCATED_COMMAND(Eh9h);
@@ -700,7 +740,7 @@ BEGIN_COMMAND(Fh5h) {
 	(void)AuditData;
 
 	//! We don't actually care about the tempo controller here, so just parse and ignore
-	int Result = Track_ReadController(MML, NULL, Track, Track_ReadMulti(Track, 3), 1);
+	int Result = Track_ReadController(MML, NULL, Track, Track_ReadMulti(Track, 3) + (1<<1), 1);
 	if(Result == MML_ERROR) {
 		MML_AppendErrorContext(MML, "Audit: While reading tempo control command (Fh,5h):");
 	}

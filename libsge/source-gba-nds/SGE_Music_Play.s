@@ -76,10 +76,10 @@ SGE_Music_PlayEx:
 	LDR	r7, =0<<0 | 0<<8 | 128<<16 | 128<<24
 	MOV	r3, r2
 	STMIA	r0!, {r2-r3,r7} @ Vel = 100, Vol = 100, Exp = 128
-	LDR	r3, =0<<0 | 0<<8 | 0x3F80<<16
+	MOV	r3, #0<<0 | 0<<8 | 0<<16
 	LDR	r2, =0<<0 | 0<<8 | 64<<16 | 64<<24
 	LSR	r7, r3, #0x10
-	STMIA	r0!, {r2-r3,r7} @ Pan = 64, Bnd = 3F80h(=0.0), RepeatType = 0, NybbleStack = 0, PortamentoVoice = 0
+	STMIA	r0!, {r2-r3,r7} @ Pan = 64, Bnd = 0, RepeatType = 0, NybbleStack = 0, PortamentoVoice = 0
 	ADD	r0, #0x04       @ Skip portamento data
 	LDMIA	r5!, {r3}
 	ADD	r3, lr          @ Src = Song + TrkOffs[i]

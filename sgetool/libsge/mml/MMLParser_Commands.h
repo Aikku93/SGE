@@ -387,7 +387,7 @@ static int MML_Command_Panning(struct MML_t *MML) {
 /************************************************/
 
 static int MML_Command_PitchBend(struct MML_t *MML) {
-	int Result = MML_ParseController(MML, MML_CMD_PITCHBEND, 16, -(127<<7) + 1, +(127<<7) - 1, 128.0, 1, 1);
+	int Result = MML_ParseController(MML, MML_CMD_PITCHBEND, 16, -(128<<7), +(128<<7)-1, 128.0, 1, 1);
 	if(Result == MML_ERROR) {
 		MML_AppendErrorContext(MML, "While parsing pitch-bend controller:");
 	}

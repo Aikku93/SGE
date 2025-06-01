@@ -23,10 +23,12 @@ WIP. Not checked, likely incomplete.
 | Eh,0h | PortamentoOn                                    | [N/A]              |
 | Eh,1h | PortamentoOff                                   | [N/A]              |
 | Eh,2h | RepeatStart                                     | [N/A]              |
-| Eh,3h | [Unallocated]                                   |                    |
-| Eh,4h | [Unallocated]                                   |                    |
-| Eh,5h | [Unallocated]                                   |                    |
-| Eh,6h | [Unallocated]                                   |                    |
+| Eh,3h | PitchBendSt1                                    | Value   (HalfByte) |
+| Eh,4h | PitchBendSt1Ramp                                | Value   (HalfByte) |
+|       |                                                 | Length  (TimeCode) |
+| Eh,5h | PitchBendSt2                                    | Value   (ByteCode) |
+| Eh,6h | PitchBendSt2Ramp                                | Value   (ByteCode) |
+|       |                                                 | Length  (TimeCode) |
 | Eh,7h | [Unallocated]                                   |                    |
 | Eh,8h | [Unallocated]                                   |                    |
 | Eh,9h | [Unallocated]                                   |                    |
@@ -174,7 +176,16 @@ track nesting level when combined with Break commands (Fh,Ch).
 
 If a Repeat section doesn't use Break commands, this command is NOT required.
 
-Eh,3h..Fh: Unallocated
+Eh,3h..6h: PitchBend (semitones)
+------------------
+
+These commands are simplifications of the Dh (PitchBend) command, using coarse
+tuning at the semitone scale and no fine-tuning.
+
+Eh,3h..4h (PitchBendSt1/Ramp) encodes a range of -8..+7 semitones, while the
+Eh,5h..6h commands (PitchBendSt2/Ramp) encodes a range of -128..+127.
+
+Eh,7h..Fh: Unallocated
 ----------------------
 
 These command slots currently map to the End command (Fh,Fh), and are reserved

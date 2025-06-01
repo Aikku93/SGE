@@ -134,7 +134,8 @@ SGE_Driver_UpdatePlayer:
 	LDRB	r7, [r0, #0x18+2]   @ Trk.Pan -> r7
 	MUL	r1, r6
 	LDRB	r6, [r0, #0x03]     @ Trk.Priority -> r6
-	LDRH	r0, [r0, #0x1C+2]   @ Trk.Bnd -> r0
+	MOV	r2, #0x1C+2
+	LDRSH	r0, [r0, r2]        @ Trk.Bnd -> r0
 	MOV	r2, r8              @ Set Priority=0 for this voice (all voices in Release have Priority=0)
 	LDRB	r2, [r2, r3]        @  This is done by just subtracting the track priority from the calculated
 	LSL	r6, #0x1B-24        @  voice priority. Theoretically, the values could get messed up if the
@@ -142,11 +143,7 @@ SGE_Driver_UpdatePlayer:
 	MOV	r2, r8
 	STRB	r6, [r2, r3]
 	LSR	r1, #(21-7)         @ Vol = Ply.Vol * Trk.Vol * Trk.Exp -> 1.7fxp
-	MOV	r2, #0x7F           @ Unbias the bend value
-	LSL	r2, #0x07           @ Vol | Pan<<8 | Bnd<<16
-	SUB	r0, r2
-	ADD	r0, r0              @ Convert Bnd to 8.8 from 7.8
-	LSL	r0, #0x08
+	LSL	r0, #0x08           @ Vol | Pan<<8 | Bnd<<16
 	ORR	r0, r7
 	LSL	r0, #0x08
 	ORR	r0, r1
@@ -326,8 +323,10 @@ SGE_Driver_UpdatePlayer:
 
 .LUpdateCtrl16:
 	PUSH	{lr}
-	LDRH	r2, [r0, #0x02] @ Value -> r2
-	LDRH	r3, [r0, #0x04] @ Target -> r3
+	MOV	r2, #0x02
+	MOV	r3, #0x04
+	LDRSH	r2, [r0, r2]    @ Value -> r2
+	LDRSH	r3, [r0, r3]    @ Target -> r3
 	BL	.LUpdateCtrlGeneric
 	STRH	r2, [r0, #0x02] @ Store new Value
 	POP	{pc}

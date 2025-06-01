@@ -152,9 +152,16 @@ ASM_ALIGN(4)
 
 @ Dh: PitchBend
 .LSongCommandDh:
+	BL	.LFetchWord     @ Ramp | Value<<1 -> r1
+	LSR	r0, r1, #0x01   @ Expand Value to 8.8fxp
+	LSL	r0, #0x01
+	ADD	r0, r1
+	MOV	r1, #0x80       @ Unbias Value
+	LSL	r1, #0x08+1
+	SUB	r0, r1
 	MOV	r2, #0x1C       @ ReadCtrl16(Bnd)
 	ADD	r2, r4
-	B	.LReadCtrl16
+	B	.LStoreCtrlMost16
 
 /************************************************/
 
@@ -198,6 +205,54 @@ ASM_ALIGN(4)
 	STRB	r3, [r1, r0]    @ ReptCnt[StackDepth] = [anything non-zero]
 	B	.LTrackReadLoop
 0:	B	.LSongCommandFhFh
+
+/************************************************/
+
+@ Eh,3h: PitchBendSt1
+
+.LSongCommandEh3h:
+	FETCH_NYBBLE
+	SUB	r0, #0x08       @ Unbias, and scale up to 8.8fxp
+	LSL	r0, #0x08
+	MOV	r2, #0x1C       @ StoreCtrl16(Bnd)
+	ADD	r2, r4
+	B	.LStoreCtrlMost16_NoRamp
+
+/************************************************/
+
+@ Eh,4h: PitchBendSt1Ramp
+
+.LSongCommandEh4h:
+	FETCH_NYBBLE
+	SUB	r0, #0x08       @ Unbias, and scale up to 8.8fxp
+	LSL	r0, #0x08
+	MOV	r2, #0x1C       @ StoreCtrl16(Bnd)
+	ADD	r2, r4
+	B	.LStoreCtrlMost16_Ramp
+
+/************************************************/
+
+@ Eh,5h: PitchBendSt2
+
+.LSongCommandEh5h:
+	BL	.LFetchByte
+	SUB	r0, #0x80       @ Unbias, and scale up to 8.8fxp
+	LSL	r0, #0x08
+	MOV	r2, #0x1C       @ StoreCtrl16(Bnd)
+	ADD	r2, r4
+	B	.LStoreCtrlMost16_NoRamp
+
+/************************************************/
+
+@ Eh,6h: PitchBendSt2Ramp
+
+.LSongCommandEh6h:
+	BL	.LFetchByte
+	SUB	r0, #0x80       @ Unbias, and scale up to 8.8fxp
+	LSL	r0, #0x08
+	MOV	r2, #0x1C       @ StoreCtrl16(Bnd)
+	ADD	r2, r4
+	B	.LStoreCtrlMost16_Ramp
 
 /************************************************/
 
@@ -252,12 +307,13 @@ ASM_ALIGN(4)
 
 @ Fh,5h: Tempo
 .LSongCommandFh5h:
-	MOV	r3, #0x03       @ TempoVal -> r1
+	MOV	r3, #0x03        @ TempoVal -> r1
 	BL	.LFetchMulti
-	LDR	r3, [sp, #0x00] @ Player -> r3
-	MOV	r2, #0x08       @ ReadCtrl(Player->Tempo)
+	ADD	r0, r1, #0x01<<1 @ Unbias the tempo -> r0
+	LDR	r3, [sp, #0x00]  @ Player -> r3
+	MOV	r2, #0x08        @ ReadCtrl(Player->Tempo)
 	ADD	r2, r3
-	B	.LReadCtrlMost16
+	B	.LStoreCtrlMost16
 
 /************************************************/
 
@@ -450,10 +506,6 @@ ASM_ALIGN(4)
 /************************************************/
 
 @ Fh,Fh: EndOfTrack
-.LSongCommandEh3h:
-.LSongCommandEh4h:
-.LSongCommandEh5h:
-.LSongCommandEh6h:
 .LSongCommandEh7h:
 .LSongCommandEh8h:
 .LSongCommandEh9h:
@@ -517,20 +569,16 @@ ASM_ALIGN(4)
 
 /************************************************/
 
+@ r0:  Ramp | Value<<1 (at most 16bit)
 @ r2: &Ctrl
 
-.LReadCtrl16:
-	BL	.LFetchWord      @ Ramp | Value<<1 -> r1
+.LStoreCtrlMost16:
+	ASR	r0, #0x01        @ Value -> r0, Ramp -> C?
+	BCC	.LStoreCtrlMost16_NoRamp
 
-@ r1:  Ramp | Value<<1 (at most 16bit)
-@ r2: &Ctrl
-
-.LReadCtrlMost16:
-	ADD	r1, #0x01<<1     @ Unbias Value
-	LSR	r0, r1, #0x01    @ Value -> r0, Ramp -> C?
+.LStoreCtrlMost16_Ramp:
 	STRH	r0, [r2, #0x04]  @ Ctrl.Target = Value
-	BCC	2f
-1:	PUSH	{r2}
+	PUSH	{r2}
 	BL	.LFetchTimeCode  @ Duration -> r0
 	POP	{r2}
 	CMP	r0, #0xFF        @ Ensure no overflow
@@ -539,7 +587,10 @@ ASM_ALIGN(4)
 0:	LSL	r0, #0x08
 	STRH	r0, [r2, #0x00]  @ Store Duration, Phase = 0
 	B	.LTrackReadLoop
-2:	STRH	r0, [r2, #0x02]  @ Ctrl.Value = Value (no ramp)
+
+.LStoreCtrlMost16_NoRamp:
+	STRH	r0, [r2, #0x02]  @ Ctrl.Value  = Value (no ramp)
+	STRH	r0, [r2, #0x04]  @ Ctrl.Target = Value
 	B	.LTrackReadLoop
 
 /************************************************/

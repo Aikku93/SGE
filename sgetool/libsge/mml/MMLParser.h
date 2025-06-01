@@ -268,6 +268,25 @@ static int MML_FinalizeTrack(struct MML_t *MML) {
 
 //! Write controller command to output
 static int MML_ParseController_WriteCommand(struct MML_t *MML, uint8_t Command, int nBits, int BiasedValue) {
+	if(Command == MML_CMD_PITCHBEND && (BiasedValue & (0x7F<<1)) == 0) {
+		//! PitchBend without fine tuning
+		int St = (BiasedValue >> 8) - 128;
+		if(St >= -8 && St <= +7) {
+			return MML_ParseController_WriteCommand(
+				MML,
+				MML_CMD_PITCHBENDST1 + (BiasedValue & 1),
+				4,
+				St + 8
+			);
+		} else {
+			return MML_ParseController_WriteCommand(
+				MML,
+				MML_CMD_PITCHBENDST2 + (BiasedValue & 1),
+				8,
+				St + 128
+			);
+		}
+	}
 #define DO_BITS_AT(x) \
 	if(nBits > (x) && MML_WriteNybble(MML, (uint8_t)(BiasedValue >> (x)) & 0xF) == MML_ERROR) return MML_ERROR
 	if(MML_WriteCommand(MML, Command) == MML_ERROR) return MML_ERROR;

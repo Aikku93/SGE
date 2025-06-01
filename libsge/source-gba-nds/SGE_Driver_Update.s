@@ -579,12 +579,11 @@ ASM_MODE_THUMB
 	LDRB	r2, [r1, #0x14+2]         @ Vol *= Trk.Exp [1.14 + 1.7 = 1.21fxp]
 	MUL	r2, r3
 	LDRB	r3, [r1, #0x18+2]         @ Pan -> r3
-	LDRH	r1, [r1, #0x1C+2]         @ Bnd -> r1
-	MOV	r0, #0x7F
-	LSL	r0, #0x07
+	ADD	r1, #0x1C+2
+	LDRH	r1, [r1]                  @ Bnd -> r1
 	LSR	r2, #(21-7)               @ Vol -> r2 [1.7fxp]
-	SUB	r1, r0                    @ Unbias the bend value
-	ADD	r1, r1                    @ Shift bend up to 8.8fxp
+	LSL	r1, #0x10
+	ASR	r1, #0x10
 .LMixer_VoxLoop_GetTrackState_Done:
 
 /************************************************/
