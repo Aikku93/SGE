@@ -210,7 +210,7 @@ static int FinalizeInstrument(struct DLS_t *DLS, struct DLS_Instrument_t *Instru
 
 			//! Remove all regions we merged with
 			if(nRegionsToMerge) {
-				memmove(Region+1, Region+1 + nRegionsToMerge, nRegions - nRegionsToMerge - (RegionIdx+1));
+				memmove(Region+1, Region+1 + nRegionsToMerge, (nRegions - nRegionsToMerge - (RegionIdx+1)) * sizeof(struct DLS_Region_t));
 				nRegions -= nRegionsToMerge;
 			}
 		}
