@@ -134,8 +134,7 @@ SGE_Driver_UpdatePlayer:
 	LDRB	r7, [r0, #0x18+2]   @ Trk.Pan -> r7
 	MUL	r1, r6
 	LDRB	r6, [r0, #0x03]     @ Trk.Priority -> r6
-	MOV	r2, #0x1C+2
-	LDRSH	r0, [r0, r2]        @ Trk.Bnd -> r0
+	LDRH	r0, [r0, #0x1C+2]   @ Trk.Bnd -> r0
 	MOV	r2, r8              @ Set Priority=0 for this voice (all voices in Release have Priority=0)
 	LDRB	r2, [r2, r3]        @  This is done by just subtracting the track priority from the calculated
 	LSL	r6, #0x1B-24        @  voice priority. Theoretically, the values could get messed up if the

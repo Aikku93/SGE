@@ -54,10 +54,6 @@ SGE_Music_StopPlayerVoices:
 	MUL	r5, r7
 	LDRH	r7, [r3, #0x1C+2] @ Trk.Bnd -> r7
 	LSR	r5, #(21-7)       @ Vol = Ply.Vol * Trk.Vol * Trk.Exp -> 1.7fxp
-	MOV	r3, #0x7F         @ Unbias the bend value
-	LSL	r3, #0x07
-	SUB	r7, r3
-	ADD	r7, r7            @ Convert Bnd to 8.8fxp
 	LSL	r7, #0x08         @ Vol | Pan<<8 | Bnd<<16 -> r7
 	ORR	r7, r6
 	LSL	r7, #0x08
