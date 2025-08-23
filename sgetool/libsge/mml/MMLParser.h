@@ -268,20 +268,27 @@ static int MML_FinalizeTrack(struct MML_t *MML) {
 
 //! Write controller command to output
 static int MML_ParseController_WriteCommand(struct MML_t *MML, uint8_t Command, int nBits, int BiasedValue) {
-	if(Command == MML_CMD_PITCHBEND && (BiasedValue & (0x7F<<1)) == 0) {
+	if(
+		(Command == MML_CMD_PITCHBEND || Command == MML_CMD_RELPITCHBEND) &&
+		(BiasedValue & (0x7F<<1)) == 0
+	) {
+		//! Select PitchBend or RelPitchBend, and adjust for ramping
+		Command  = (Command == MML_CMD_PITCHBEND) ? MML_CMD_PITCHBENDST1 : MML_CMD_RELPITCHBENDST1;
+		Command += (BiasedValue & 1);
+
 		//! PitchBend without fine tuning
 		int St = (BiasedValue >> 8) - 128;
 		if(St >= -8 && St <= +7) {
 			return MML_ParseController_WriteCommand(
 				MML,
-				MML_CMD_PITCHBENDST1 + (BiasedValue & 1),
+				Command,
 				4,
 				St + 8
 			);
 		} else {
 			return MML_ParseController_WriteCommand(
 				MML,
-				MML_CMD_PITCHBENDST2 + (BiasedValue & 1),
+				Command + MML_CMD_PITCHBENDST2 - MML_CMD_PITCHBENDST1,
 				8,
 				St + 128
 			);
@@ -301,8 +308,28 @@ static int MML_ParseController_WriteCommand(struct MML_t *MML, uint8_t Command, 
 //! Parse controller value, and return an unbiased value
 //! Min/Max are the ranges of the unbiased value, and Scale is applied to
 //! a floating-point input when converting it to the integer value.
-static int MML_ParseController_ParseValue(struct MML_t *MML, int Min, int Max, int ValueMul, int ValueDiv, double Scale) {
+static int MML_ParseController_ParseValue(
+	struct MML_t *MML,
+	int Min,
+	int Max,
+	int ValueMul,
+	int ValueDiv,
+	double Scale,
+	uint8_t *IsRelativePtr
+) {
 	struct MML_InputOffs_t ValueOffs; MML_GetInputOffset(MML, &ValueOffs);
+
+	//! Check if value is relative
+	*IsRelativePtr = 0;
+	if(MML_PeekNextChar(MML) == '~') {
+		MML_ConsumeChars(MML, 1, 0);
+		*IsRelativePtr = 1;
+
+		//! Fix min/max values
+		int Range = Max - Min + 1;
+		Min = -(Range >> 1);
+		Max = +(Range >> 1) - 1;
+	}
 
 	//! Read value as raw or standard
 	int32_t Value;
@@ -339,9 +366,10 @@ static int MML_ParseController_ParseValue(struct MML_t *MML, int Min, int Max, i
 }
 
 //! Parse controller (specified as either float value or #Raw)
-static int MML_ParseController(
+static int MML_ParseController_RelativeSupport(
 	struct MML_t *MML,
 	uint8_t Command,
+	uint8_t Command_Relative,
 	int nBits,
 	int Min,
 	int Max,
@@ -349,12 +377,23 @@ static int MML_ParseController(
 	int ValueMul,
 	int ValueDiv
 ) {
+	uint8_t OutCommand, IsRelative;
+	struct MML_InputOffs_t ValueOffs;
+
 	//! Check for sweep without immediate
 	if(!MML_PeekStringMatch(MML, "->", 0)) {
 		//! If we don't match `->`, then we need to parse the immediate value
-		int Value = MML_ParseController_ParseValue(MML, Min, Max, ValueMul, ValueDiv, Scale);
+		MML_GetInputOffset(MML, &ValueOffs);
+		int Value = MML_ParseController_ParseValue(MML, Min, Max, ValueMul, ValueDiv, Scale, &IsRelative);
 		if(Value == MML_ERROR) return MML_ERROR;
-		if(MML_ParseController_WriteCommand(MML, Command, nBits, Value << 1 | 0) == MML_ERROR) return MML_ERROR;
+
+		//! Interpret relative value as needed
+		OutCommand = !IsRelative ? Command : Command_Relative;
+		if(OutCommand == MML_CMD_NULL) {
+			MML_AppendError(MML, "Controller does not support relative values; value must be absolute.", &ValueOffs);
+			return MML_ERROR;
+		}
+		if(MML_ParseController_WriteCommand(MML, OutCommand, nBits, Value << 1 | 0) == MML_ERROR) return MML_ERROR;
 	}
 
 	//! If we have a sweep, apply that next
@@ -362,8 +401,16 @@ static int MML_ParseController(
 		MML_ConsumeChars(MML, strlen("->"), 0);
 
 		//! Read the target value
-		int Value = MML_ParseController_ParseValue(MML, Min, Max, ValueMul, ValueDiv, Scale);
+		MML_GetInputOffset(MML, &ValueOffs);
+		int Value = MML_ParseController_ParseValue(MML, Min, Max, ValueMul, ValueDiv, Scale, &IsRelative);
 		if(Value == MML_ERROR) return MML_ERROR;
+
+		//! Interpret relative value as needed
+		OutCommand = !IsRelative ? Command : Command_Relative;
+		if(OutCommand == MML_CMD_NULL) {
+			MML_AppendError(MML, "Controller does not support relative values; value must be absolute.", &ValueOffs);
+			return MML_ERROR;
+		}
 
 		//! Ensure duration is preceded by '='
 		if(MML_PeekNextChar(MML) != '=') {
@@ -386,13 +433,35 @@ static int MML_ParseController(
 
 		//! Output the command
 		if(
-			MML_ParseController_WriteCommand(MML, Command, nBits, Value << 1 | 1) == MML_ERROR ||
+			MML_ParseController_WriteCommand(MML, OutCommand, nBits, Value << 1 | 1) == MML_ERROR ||
 			MML_WriteTimeCode(MML, Duration) == MML_ERROR
 		) return MML_ERROR;
 	}
 
 	//! All done
 	return MML_OK;
+}
+static int MML_ParseController(
+	struct MML_t *MML,
+	uint8_t Command,
+	int nBits,
+	int Min,
+	int Max,
+	double Scale,
+	int ValueMul,
+	int ValueDiv
+) {
+	return MML_ParseController_RelativeSupport(
+		MML,
+		Command,
+		MML_CMD_NULL,
+		nBits,
+		Min,
+		Max,
+		Scale,
+		ValueMul,
+		ValueDiv
+	);
 }
 
 /************************************************/

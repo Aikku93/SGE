@@ -121,7 +121,6 @@ ASM_ALIGN(4)
 @ 9h: Velocity
 .LSongCommand9h:
 	MOV	r2, #0x0C       @ ReadCtrl8(Vel)
-	ADD	r2, r4
 	B	.LReadCtrl8
 
 /************************************************/
@@ -129,7 +128,6 @@ ASM_ALIGN(4)
 @ Ah: Volume
 .LSongCommandAh:
 	MOV	r2, #0x10       @ ReadCtrl8(Vol)
-	ADD	r2, r4
 	B	.LReadCtrl8
 
 /************************************************/
@@ -137,7 +135,6 @@ ASM_ALIGN(4)
 @ Bh: Expression
 .LSongCommandBh:
 	MOV	r2, #0x14       @ ReadCtrl8(Exp)
-	ADD	r2, r4
 	B	.LReadCtrl8
 
 /************************************************/
@@ -145,7 +142,6 @@ ASM_ALIGN(4)
 @ Ch: Panning
 .LSongCommandCh:
 	MOV	r2, #0x18       @ ReadCtrl8(Pan)
-	ADD	r2, r4
 	B	.LReadCtrl8
 
 /************************************************/
@@ -160,7 +156,6 @@ ASM_ALIGN(4)
 	LSL	r1, #0x08+1
 	SUB	r0, r1
 	MOV	r2, #0x1C       @ ReadCtrl16(Bnd)
-	ADD	r2, r4
 	B	.LStoreCtrlMost16
 
 /************************************************/
@@ -215,7 +210,6 @@ ASM_ALIGN(4)
 	SUB	r0, #0x08       @ Unbias, and scale up to 8.8fxp
 	LSL	r0, #0x08
 	MOV	r2, #0x1C       @ StoreCtrl16(Bnd)
-	ADD	r2, r4
 	B	.LStoreCtrlMost16_NoRamp
 
 /************************************************/
@@ -227,7 +221,6 @@ ASM_ALIGN(4)
 	SUB	r0, #0x08       @ Unbias, and scale up to 8.8fxp
 	LSL	r0, #0x08
 	MOV	r2, #0x1C       @ StoreCtrl16(Bnd)
-	ADD	r2, r4
 	B	.LStoreCtrlMost16_Ramp
 
 /************************************************/
@@ -239,7 +232,6 @@ ASM_ALIGN(4)
 	SUB	r0, #0x80       @ Unbias, and scale up to 8.8fxp
 	LSL	r0, #0x08
 	MOV	r2, #0x1C       @ StoreCtrl16(Bnd)
-	ADD	r2, r4
 	B	.LStoreCtrlMost16_NoRamp
 
 /************************************************/
@@ -251,8 +243,71 @@ ASM_ALIGN(4)
 	SUB	r0, #0x80       @ Unbias, and scale up to 8.8fxp
 	LSL	r0, #0x08
 	MOV	r2, #0x1C       @ StoreCtrl16(Bnd)
-	ADD	r2, r4
 	B	.LStoreCtrlMost16_Ramp
+
+/************************************************/
+
+@ Eh,7h: RelPitchBend
+.LSongCommandEh7h:
+	BL	.LFetchWord     @ Ramp | Value<<1 -> r1
+	LSR	r0, r1, #0x01   @ Expand Value to 8.8fxp
+	LSL	r0, #0x01
+	ADD	r0, r1
+	MOV	r1, #0x80       @ Unbias Value
+	LSL	r1, #0x08+1
+	SUB	r0, r1
+
+.LSongCommand_RelPitchBend:
+	MOV	r2, #0x1C+0x02  @ Value = Bnd.Value + Delta
+	LDRSH	r1, [r4, r2]
+	MOV	r2, #0x1C       @ ReadCtrl16(Bnd)
+	LSL	r1, #0x01       @ <- Make sure to account for the Ramp bit!
+	ADD	r0, r1
+	B	.LStoreCtrlMost16
+
+/************************************************/
+
+@ Eh,8h: RelPitchBendSt1
+
+.LSongCommandEh8h:
+	FETCH_NYBBLE
+	SUB	r0, #0x08       @ Unbias, and scale up to 8.8fxp
+	LSL	r0, #0x08+1
+	@ADD	r0, #0x00       @ Ramp = 0
+	B	.LSongCommand_RelPitchBend
+
+/************************************************/
+
+@ Eh,9h: RelPitchBendSt1Ramp
+
+.LSongCommandEh9h:
+	FETCH_NYBBLE
+	SUB	r0, #0x08       @ Unbias, and scale up to 8.8fxp
+	LSL	r0, #0x08+1
+	ADD	r0, #0x01       @ Ramp = 1
+	B	.LSongCommand_RelPitchBend
+
+/************************************************/
+
+@ Eh,Ah: RelPitchBendSt2
+
+.LSongCommandEhAh:
+	BL	.LFetchByte
+	SUB	r0, #0x80       @ Unbias, and scale up to 8.8fxp
+	LSL	r0, #0x08+1
+	@ADD	r0, #0x00       @ Ramp = 0
+	B	.LSongCommand_RelPitchBend
+
+/************************************************/
+
+@ Eh,Bh: RelPitchBendSt2Ramp
+
+.LSongCommandEhBh:
+	BL	.LFetchByte
+	SUB	r0, #0x80       @ Unbias, and scale up to 8.8fxp
+	LSL	r0, #0x08+1
+	ADD	r0, #0x01       @ Ramp = 1
+	B	.LSongCommand_RelPitchBend
 
 /************************************************/
 
@@ -309,10 +364,10 @@ ASM_ALIGN(4)
 .LSongCommandFh5h:
 	MOV	r3, #0x03        @ TempoVal -> r1
 	BL	.LFetchMulti
-	ADD	r0, r1, #0x01<<1 @ Unbias the tempo -> r0
 	LDR	r3, [sp, #0x00]  @ Player -> r3
-	MOV	r2, #0x08        @ ReadCtrl(Player->Tempo)
-	ADD	r2, r3
+	ADD	r0, r1, #0x01<<1 @ Unbias the tempo -> r0
+	SUB	r2, r3, r4       @ Make relative to Player rather than Track
+	ADD	r2, #0x08        @ ReadCtrl(Player->Tempo)
 	B	.LStoreCtrlMost16
 
 /************************************************/
@@ -506,11 +561,6 @@ ASM_ALIGN(4)
 /************************************************/
 
 @ Fh,Fh: EndOfTrack
-.LSongCommandEh7h:
-.LSongCommandEh8h:
-.LSongCommandEh9h:
-.LSongCommandEhAh:
-.LSongCommandEhBh:
 .LSongCommandEhCh:
 .LSongCommandEhDh:
 .LSongCommandEhEh:
@@ -547,9 +597,10 @@ ASM_ALIGN(4)
 .pool
 /************************************************/
 
-@ r2: &Ctrl
+@ r2: CtrlOffs (relative to &Track)
 
 .LReadCtrl8:
+	ADD	r2, r4           @ &Ctrl -> r2
 	BL	.LFetchByte      @ Ramp | Value<<1 -> r0
 	ADD	r0, #0x01<<1     @ Unbias Value
 	LSR	r0, #0x01        @ Value -> r0, Ramp -> C?
@@ -569,14 +620,15 @@ ASM_ALIGN(4)
 
 /************************************************/
 
-@ r0:  Ramp | Value<<1 (at most 16bit)
-@ r2: &Ctrl
+@ r0: Ramp | Value<<1 (at most 16bit)
+@ r2: CtrlOffs (relative to &Track)
 
 .LStoreCtrlMost16:
 	ASR	r0, #0x01        @ Value -> r0, Ramp -> C?
 	BCC	.LStoreCtrlMost16_NoRamp
 
 .LStoreCtrlMost16_Ramp:
+	ADD	r2, r4           @ &Ctrl -> r2
 	STRH	r0, [r2, #0x04]  @ Ctrl.Target = Value
 	PUSH	{r2}
 	BL	.LFetchTimeCode  @ Duration -> r0
@@ -589,6 +641,7 @@ ASM_ALIGN(4)
 	B	.LTrackReadLoop
 
 .LStoreCtrlMost16_NoRamp:
+	ADD	r2, r4           @ &Ctrl -> r2
 	STRH	r0, [r2, #0x02]  @ Ctrl.Value  = Value (no ramp)
 	STRH	r0, [r2, #0x04]  @ Ctrl.Target = Value
 	B	.LTrackReadLoop

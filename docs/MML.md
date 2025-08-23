@@ -202,6 +202,10 @@ more generally to simulate moving microhone positions.
 Pitch bend is used to alter the pitch of all notes associated with this track,
 and ranges -127.0..+127.0 semitones. This can be used to simulate pitch slides
 on string and brass instruments, for example, or simply for effects.
+Relative pitch bends (relative to the current bend) can be performed by using
+a `~` symbol prior to the value (eg. `T~-1->+3=2` would set the bend to -1.0
+semitones relative to the current bend value, then ramp to an absolute value
+of +3.0 semitones over two beats).
 
 Tempo controls the playback speed of the song, and is specified as 1..1024BPM.
 

@@ -676,12 +676,77 @@ BEGIN_COMMAND(Eh6h) {
 	return Result;
 }
 
+//! Eh,7h: RelPitchBend
+BEGIN_COMMAND(Eh7h) {
+	(void)AuditData;
+	int32_t Value = (int32_t)Track->Bnd.Value + (int32_t)Track_ReadWord(Track) - (128<<7);
+	if(Value < -(128<<7)  ) Value = -(128<<7);
+	if(Value > +(128<<7)-1) Value = +(128<<7)-1;
+	Value = Value<<1 | 0;
+	int Result = Track_ReadController(MML, (union SGE_CtrlUnion_t*)(&Track->Bnd), Track, Value, 1);
+	if(Result == MML_ERROR) {
+		MML_AppendErrorContext(MML, "Audit: While reading relative pitch-bend control command (Eh,7h):");
+	}
+	return Result;
+}
+
+//! Eh,8h: RelPitchBendSt1
+BEGIN_COMMAND(Eh8h) {
+	(void)AuditData;
+	int32_t Value = (int32_t)Track->Bnd.Value + (((int32_t)Track_ReadNybble(Track) - 8) << 7);
+	if(Value < -(128<<7)  ) Value = -(128<<7);
+	if(Value > +(128<<7)-1) Value = +(128<<7)-1;
+	Value = Value<<1 | 0;
+	int Result = Track_ReadController(MML, (union SGE_CtrlUnion_t*)(&Track->Bnd), Track, Value, 1);
+	if(Result == MML_ERROR) {
+		MML_AppendErrorContext(MML, "Audit: While reading relative pitch-bend control command (Eh,8h):");
+	}
+	return Result;
+}
+
+//! Eh,9h: RelPitchBendSt1Ramp
+BEGIN_COMMAND(Eh9h) {
+	(void)AuditData;
+	int32_t Value = (int32_t)Track->Bnd.Value + (((int32_t)Track_ReadNybble(Track) - 8) << 7);
+	if(Value < -(128<<7)  ) Value = -(128<<7);
+	if(Value > +(128<<7)-1) Value = +(128<<7)-1;
+	Value = Value<<1 | 1;
+	int Result = Track_ReadController(MML, (union SGE_CtrlUnion_t*)(&Track->Bnd), Track, Value, 1);
+	if(Result == MML_ERROR) {
+		MML_AppendErrorContext(MML, "Audit: While reading relative pitch-bend control command (Eh,9h):");
+	}
+	return Result;
+}
+
+//! Eh,Ah: RelPitchBendSt2
+BEGIN_COMMAND(EhAh) {
+	(void)AuditData;
+	int32_t Value = (int32_t)Track->Bnd.Value + (((int32_t)Track_ReadByte(Track) - 128) << 7);
+	if(Value < -(128<<7)  ) Value = -(128<<7);
+	if(Value > +(128<<7)-1) Value = +(128<<7)-1;
+	Value = Value<<1 | 0;
+	int Result = Track_ReadController(MML, (union SGE_CtrlUnion_t*)(&Track->Bnd), Track, Value, 1);
+	if(Result == MML_ERROR) {
+		MML_AppendErrorContext(MML, "Audit: While reading relative pitch-bend control command (Eh,Ah):");
+	}
+	return Result;
+}
+
+//! Eh,Bh: RelPitchBendSt2Ramp
+BEGIN_COMMAND(EhBh) {
+	(void)AuditData;
+	int32_t Value = (int32_t)Track->Bnd.Value + (((int32_t)Track_ReadByte(Track) - 128) << 7);
+	if(Value < -(128<<7)  ) Value = -(128<<7);
+	if(Value > +(128<<7)-1) Value = +(128<<7)-1;
+	Value = Value<<1 | 1;
+	int Result = Track_ReadController(MML, (union SGE_CtrlUnion_t*)(&Track->Bnd), Track, Value, 1);
+	if(Result == MML_ERROR) {
+		MML_AppendErrorContext(MML, "Audit: While reading relative pitch-bend control command (Eh,Bh):");
+	}
+	return Result;
+}
+
 //! Eh,7h..Fh: Unallocated
-UNALLOCATED_COMMAND(Eh7h);
-UNALLOCATED_COMMAND(Eh8h);
-UNALLOCATED_COMMAND(Eh9h);
-UNALLOCATED_COMMAND(EhAh);
-UNALLOCATED_COMMAND(EhBh);
 UNALLOCATED_COMMAND(EhCh);
 UNALLOCATED_COMMAND(EhDh);
 UNALLOCATED_COMMAND(EhEh);

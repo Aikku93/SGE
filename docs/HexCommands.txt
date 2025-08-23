@@ -29,11 +29,13 @@ WIP. Not checked, likely incomplete.
 | Eh,5h | PitchBendSt2                                    | Value   (ByteCode) |
 | Eh,6h | PitchBendSt2Ramp                                | Value   (ByteCode) |
 |       |                                                 | Length  (TimeCode) |
-| Eh,7h | [Unallocated]                                   |                    |
-| Eh,8h | [Unallocated]                                   |                    |
-| Eh,9h | [Unallocated]                                   |                    |
-| Eh,Ah | [Unallocated]                                   |                    |
-| Eh,Bh | [Unallocated]                                   |                    |
+| Eh,7h | RelPitchBend                                    | Value   (RampWord) |
+| Eh,8h | RelPitchBendSt1                                 | Value   (HalfByte) |
+| Eh,9h | RelPitchBendSt1Ramp                             | Value   (HalfByte) |
+|       |                                                 | Length  (TimeCode) |
+| Eh,Ah | RelPitchBendSt2                                 | Value   (ByteCode) |
+| Eh,Bh | RelPitchBendSt2Ramp                             | Value   (ByteCode) |
+|       |                                                 | Length  (TimeCode) |
 | Eh,Ch | [Unallocated]                                   |                    |
 | Eh,Dh | [Unallocated]                                   |                    |
 | Eh,Eh | [Unallocated]                                   |                    |
@@ -185,7 +187,15 @@ tuning at the semitone scale and no fine-tuning.
 Eh,3h..4h (PitchBendSt1/Ramp) encodes a range of -8..+7 semitones, while the
 Eh,5h..6h commands (PitchBendSt2/Ramp) encodes a range of -128..+127.
 
-Eh,7h..Fh: Unallocated
+Eh,7h..Bh: RelPitchBend
+-----------------------
+
+These commands are similar to the Dh, and Eh,3h..6h commands, except that the
+relative pitch value is added to the current value to form the new target.
+
+The final calculated value must /wrap/, rather than clip.
+
+Eh,Ch..Fh: Unallocated
 ----------------------
 
 These command slots currently map to the End command (Fh,Fh), and are reserved
