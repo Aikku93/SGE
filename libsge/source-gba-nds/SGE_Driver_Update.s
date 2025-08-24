@@ -2142,13 +2142,15 @@ ASM_MODE_ARM
 	B	.LMixer_VoxLoop_UpdateLFO_UpdateOscillator_ApplySign
 
 .LMixer_VoxLoop_UpdateLFO_UpdateOscillator_Noise:
-	AND	r9, r0, #0xFF00           @ Create xorshift noise from upper 8 bits of phase
-	EOR	r9, r9, r9, lsl #0x0D
-	EOR	r9, r9, r9, lsr #0x11
-	EOR	r9, r9, r9, lsl #0x05
-	MOVS	r9, r9, lsr #(32-14)
+	MOV	ip, r0, lsl #0x10         @ Noise = (Phase*256.0)*BBh, in uppermost bits
+	AND	ip, ip, #0xFF<<24
+	RSB	r9, ip, ip, lsl #0x04
+	SUBS	r9, r9, ip, lsl #0x02
+	MOV	r9, r9, lsr #(32-14)
 	MOV	ip, r9                    @ ... and negate LFOKeyMod based on shift-out bit
 	RSBCS	ip, ip, #0x00
+	CMP	sl, #0x0100               @ Clip PhaseStep to 1 noise shift per update, or
+	MOVHI	sl, #0x0100               @ we may get no effect in the worst case
 	B	.LMixer_VoxLoop_UpdateLFO_UpdateOscillator_ApplySign
 
 /************************************************/
