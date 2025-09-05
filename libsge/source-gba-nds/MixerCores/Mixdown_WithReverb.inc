@@ -216,7 +216,7 @@ ASM_MODE_ARM
 	ADD	r8, r8, #0x01<<(SGE_ALLPASS_BITS-1)     @ <- Need to round to avoid infinite noise
 	ADD	r9, r9, #0x01<<(SGE_ALLPASS_BITS-1)
 #endif
-	SUB	r7, r7, lr, lsl #SGE_MIXER_VOLFRACBITS  @ Dry -= Bias
+	SUB	r7, r7, lr, lsl #SGE_MIXER_VOLFRACBITS + (7-SGE_MIXER_VOLBITS) @ Dry -= Bias
 	MOV	lr, r7, asr #0x10+SGE_MIXER_VOLFRACBITS @ DryR -> lr
 	MOV	r7, r7, lsl #0x10
 	MOV	r7, r7, asr #0x10+SGE_MIXER_VOLFRACBITS @ DryL -> r7

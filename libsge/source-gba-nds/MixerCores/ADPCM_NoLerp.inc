@@ -30,7 +30,9 @@ ASM_MODE_ARM
 	ADDS	r8, r5, r1, asr #0x08     @ Out -> r8
 	MULNE	r8, r6, r8
 	MOVS	r7, r7, lsl #0x10         @ Shift Position to upper 16 bits [C=0]
+#if MIX_CLEAR_MASK
 	BIC	r8, r8, #MIX_CLEAR_MASK<<16
+#endif
 0:	MOVCS	lr, lr, lsl #0x04         @ Next nybble
 1:	SUBS	fp, fp, #0x01<<16         @ --nRem?
 	BCC	2f
@@ -47,7 +49,9 @@ ASM_MODE_ARM
 	ADDS	r8, r5, r1, asr #0x08     @ Out -> r8
 	MULNE	r8, r6, r8
 999:	ADD	r0, ip, r0, lsl #0x00     @ <- Self-modifying
+#if MIX_CLEAR_MASK
 	BIC	r8, r8, #MIX_CLEAR_MASK<<16
+#endif
 	BICS	ip, lr, #0xFF000000       @ More samples in this frame? [C=1]
 	BNE	0b
 .LMixerCore_ADPCM_RateLT_NoLerp_ReadFrameOpcode:
@@ -87,7 +91,9 @@ ASM_MODE_ARM
 	ADDS	r8, r5, r1, asr #0x08
 	MULNE	r8, r6, r8
 	ADD	r7, r7, sl                @ Position += Rate
+#if MIX_CLEAR_MASK
 	BIC	r8, r8, #MIX_CLEAR_MASK<<16
+#endif
 	ADD	ip, ip, r8, lsr #MIX_SHIFT_DOWN
 	STR	ip, [r9], #0x04
 2:	MUL	ip, r1, r3                @ Decode next sample

@@ -50,18 +50,12 @@
 //!   waveforms in optimized mixing loops instead of using separate voices.
 //!  -EG1_LOG2THRESHOLD defines the threshold below which a voice will be
 //!   killed when in the Decay or Release phase.
-//!  -VOLBITS controls the precision of the mixing volumes. Note that this is
-//!   NOT like the GBA control VOLFRACBITS; whereas VOLFRACBITS refers to the
-//!   precision to preserve /after/ multiplying by the 1.7fxp volume, VOLBITS
-//!   refers to the volume precision directly (ie. the volume precision during
-//!   mixing is 1.VOLBITS fxp, eg. a value of 7 would give results identical
-//!   to those of the GBA version for the purposes of volume scaling).
-//!  -USE_VOLRAMP applies ramping to a voice's output volume. This adds extra
-//!   CPU load, but can reduce crackle from sharp envelopes. Note that unless
-//!   VOLBITS is very high (eg. 13 or 14), this option usually has no effect,
-//!   as the delta values divided by the buffer length usually collapse to 0.
-//!   Note that this option CANNOT be enabled alongside USE_VOLSUBDIV.
-//!   NOTE: This option is only available when mixing on ARM9.
+//!  -MIXER_VOLBITS controls the precision of the mixing volume; note that
+//!   this value refers to a 1.x fixed-point number (eg. a value of 7 would
+//!   correspond to a 1.7fxp volume), as we allow a max volume of 2.0-eps.
+//!   Note that unlike on GBA, we don't have a VOLFRACBITS options; this is
+//!   because the NDS mixers use 32-bit accumulation buffers, so there is no
+//!   point in not matching VOLFRACBITS to MIXER_VOLBITS.
 //!  -USE_VOLSUBDIV enables subdivision of the mixing chunk (up to a target
 //!   volume level, or length) to avoid harsh volume transitions with larger
 //!   mixing chunks. It will slightly increase CPU, but may greatly reduce
@@ -103,7 +97,6 @@
 #define SGE_STEREO_WAVEFORMS    1 //! 0 = Mono waveforms only, 1 = Enable stereo-sampled waveforms
 #define SGE_EG1_LOG2THRESHOLD   8 //! Voice is killed when EG1 drops below 1.0*2^-n
 #define SGE_MIXER_VOLBITS      14 //! Volume bits to use in mix (maximum 14)
-#define SGE_USE_VOLRAMP         0 //! 0 = No volume ramping, 1 = Apply volume ramping
 #define SGE_USE_VOLSUBDIV       1 //! 0 = No chunk subdivision for volume, 1 = Subdivide mix chunk as needed
 #define SGE_USE_OVERSAMPLING    0 //! 0 = Direct signal, 1 = Linearly interpolate to twice the sampling rate
 #define SGE_USE_CLIPPING        1 //! 0 = Don't clip, 1 = Clip output signal
@@ -137,9 +130,6 @@
 # error "SGE_MIXER_VOLBITS must be 8 ~ 14."
 #endif
 #if SGE_USE_VOLSUBDIV
-# if SGE_USE_VOLRAMP
-#  error "SGE_USE_VOLSUBDIV cannot be used with SGE_USE_VOLRAMP."
-# endif
 # if (SGE_VOLSUBDIV_MINLENGTH < 1 || SGE_VOLSUBDIV_MINLENGTH > 256)
 #  error "SGE_VOLSUBDIV_MINLENGTH must be 1~256."
 # endif

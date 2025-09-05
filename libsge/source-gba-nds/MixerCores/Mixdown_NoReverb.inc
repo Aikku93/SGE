@@ -56,7 +56,7 @@ ASM_MODE_ARM
 .endm
 
 .macro MakeLR x
-	SUB	\x, \x, r8, lsl #SGE_MIXER_VOLFRACBITS @ Remove bias (plus possible -1 overflow error in SrcR from SrcL-BiasL)
+	SUB	\x, \x, r8, lsl #SGE_MIXER_VOLFRACBITS + (7-SGE_MIXER_VOLBITS) @ Remove bias (plus possible -1 overflow error in SrcR from SrcL-BiasL)
 #if SGE_USE_OVERSAMPLING
 	MOV	ip, \x, lsl #0x10
 	MOV	\x, \x, asr #0x10+SGE_MIXER_VOLFRACBITS

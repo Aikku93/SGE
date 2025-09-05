@@ -57,7 +57,9 @@ ASM_MODE_ARM
 	ADDS	r3, r1, r3, asr #0x08
 	MULNE	r3, r6, r3                    @  Wet += Dry*Vol
 	ADDS	r7, r7, sl, lsl #0x10         @ Position += Rate?
+#if MIX_CLEAR_MASK
 	BIC	r3, r3, #MIX_CLEAR_MASK<<16
+#endif
 	ADD	\Rd, \Rd, r3, lsr #MIX_SHIFT_DOWN
 	LDRCSB	r3, [r4, #0x01]!              @  New Rb -> r3
 	ADDCS	r1, r1, r2                    @  Ra += (Rb-Ra) -> Ra = Rb -> r1
@@ -143,7 +145,9 @@ ASM_MODE_ARM
 	MULNE	\Rd, r6, \Rd                      @ Smp *= Vol
 .endm
 .macro PCM8_Mono_RateGT_Lerp_Mix Rd, Rs
+#if MIX_CLEAR_MASK
 	BIC	\Rs, \Rs, #MIX_CLEAR_MASK<<16
+#endif
 	ADD	\Rd, \Rd, \Rs, lsr #MIX_SHIFT_DOWN
 .endm
 

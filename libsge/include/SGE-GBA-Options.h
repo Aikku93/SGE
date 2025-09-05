@@ -50,10 +50,17 @@
 //!   waveforms in optimized mixing loops instead of using separate voices.
 //!  -EG1_LOG2THRESHOLD defines the threshold below which a voice will be
 //!   killed when in the Decay or Release phase.
+//!  -MIXER_VOLBITS controls the precision of the mixing volume; note that
+//!   this value refers to a 1.x fixed-point number (eg. a value of 7 would
+//!   correspond to a 1.7fxp volume), as we allow a max volume of 2.0-eps.
 //!  -VOLFRACBITS refers to extra precision bits to preserve during mixing.
 //!   These will be chopped during the final mix, but can alter the output.
 //!   For example, a value of 4 will mix in 12bit precision before being
 //!   chopped to 8bit during mixdown.
+//!   Matching this value to MIXER_VOLBITS gives a slight performance boost
+//!   due to not having to mask away sample data during mixing.
+//!   It is recommended to set this value to 6 at most, or unrecoverable
+//!   sample overflow is far more likely to happen.
 //!  -USE_VOLSUBDIV enables subdivision of the mixing chunk (up to a target
 //!   volume level, or length) to avoid harsh volume transitions with larger
 //!   mixing chunks. It will slightly increase CPU, but may greatly reduce
@@ -98,8 +105,8 @@
 #define SGE_PRECISE_KEYON       1 //! 0 = Snap key-on to mix chunks, 1 = Align key-on to samples
 #define SGE_STEREO_WAVEFORMS    1 //! 0 = Mono waveforms only, 1 = Enable stereo-sampled waveforms
 #define SGE_EG1_LOG2THRESHOLD   6 //! Voice is killed when EG1 drops below 1.0*2^-n (maximum 16)
-#define SGE_MIXER_VOLBITS       7 //! Volume bits to use in mix (fixed 7 in GBA driver)
-#define SGE_MIXER_VOLFRACBITS   3 //! Volume bits to preserve in mix (maximum 7) - NOTE: Max voices = 2^(7-x)
+#define SGE_MIXER_VOLBITS       6 //! Volume bits to use in mix (maximum 7)
+#define SGE_MIXER_VOLFRACBITS   6 //! Volume bits to preserve in mix (maximum 7)
 #define SGE_USE_VOLSUBDIV       1 //! 0 = No chunk subdivision for volume, 1 = Subdivide mix chunk as needed
 #define SGE_FAST_INTERPOLATE    1 //! 0 = Full-precision interpolation, 1 = Reduced precision interpolation
 #define SGE_USE_OVERSAMPLING    0 //! 0 = Direct signal, 1 = Linearly interpolate to twice the sampling rate
@@ -170,11 +177,11 @@
 #if (SGE_EG1_LOG2THRESHOLD < 0 || SGE_EG1_LOG2THRESHOLD > (7+SGE_MIXER_VOLFRACBITS))
 # error "SGE_EG1_LOG2THRESHOLD must be 0 ~ 7+VOLFRACBITS."
 #endif
-#if (SGE_MIXER_VOLBITS != 7)
-# error "SGE_MIXER_VOLBITS must be equal to 7."
+#if (SGE_MIXER_VOLBITS < 4 || SGE_MIXER_VOLBITS > 7)
+# error "SGE_MIXER_VOLBITS must be 4 ~ 7."
 #endif
-#if (SGE_MIXER_VOLFRACBITS < 0 || SGE_MIXER_VOLFRACBITS > 7)
-# error "SGE_MIXER_VOLFRACBITS must be 0 ~ 7."
+#if (SGE_MIXER_VOLFRACBITS < 0 || SGE_MIXER_VOLFRACBITS > SGE_MIXER_VOLBITS)
+# error "SGE_MIXER_VOLFRACBITS must be 0 ~ SGE_MIXER_VOLBITS."
 #endif
 #if SGE_USE_VOLSUBDIV
 # if (SGE_VOLSUBDIV_MINLENGTH < 1 || SGE_VOLSUBDIV_MINLENGTH > 256)

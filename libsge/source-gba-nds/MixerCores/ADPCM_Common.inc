@@ -36,17 +36,16 @@ ASM_MODE_ARM
 .LMixerCore_ADPCM_Stereo_RateLT_Lerp_InitBeg:
 .LMixerCore_ADPCM_Stereo_RateGT_Lerp_InitBeg:
 	LDR	ip, [sp, #0x10]             @ Vox -> ip
-#if (SGE_SUPPORT_LERP && !SGE_ALWAYS_LERP)
-	LDRB	r2, [r8, #0x00]             @ Wav.Interpolate|Frmt -> r2
-#endif
-#if SGE_STEREO_WAVEFORMS
-	LDRB	lr, [r8, #0x01]             @ Wav.Chan -> lr
-#endif
 	MOV	fp, #0x0F<<7                @ ShiftMask | nRem<<16 -> fp
 	ORR	fp, fp, r0, lsl #0x10
 #if SGE_STEREO_WAVEFORMS
-	CMP	sl, #0x01<<16
-	MOV	r0, lr, lsl #0x02           @ Set stride (4 bytes per frame per channel)
+	LDR	r1, RELOC_TARGET(.LMixerCore_MixFormat) @ RateGT | Stereo<<1 | Interpolate<<2
+	MOVS	r0, r1, lsr #0x01           @ C=RateGT, r0.Bit0 = Stereo
+# if SGE_SUPPORT_LERP
+	ANDS	r0, r0, #0x01
+# endif
+	MOVEQ	r0, #0x04                   @ Set stride (4 bytes per frame per channel)
+	MOVNE	r0, #0x08
 # if !SGE_SUPPORT_LERP
 	STRCCB	r0, .LMixerCore_ADPCM_InitEnd + (.LMixerCore_ADPCM_RateLT_NoLerp_ReadFrameOpcode-.LMixerCore_ADPCM_RateLT_NoLerp_Beg)
 	STRCSB	r0, .LMixerCore_ADPCM_InitEnd + (.LMixerCore_ADPCM_RateGT_NoLerp_ReadFrameOpcode-.LMixerCore_ADPCM_RateGT_NoLerp_Beg)
@@ -54,7 +53,7 @@ ASM_MODE_ARM
 	STRCCB	r0, .LMixerCore_ADPCM_InitEnd + (.LMixerCore_ADPCM_RateLT_Lerp_ReadFrameOpcode-.LMixerCore_ADPCM_RateLT_Lerp_Beg)
 	STRCSB	r0, .LMixerCore_ADPCM_InitEnd + (.LMixerCore_ADPCM_RateGT_Lerp_ReadFrameOpcode-.LMixerCore_ADPCM_RateGT_Lerp_Beg)
 # else
-	AND	r2, r2, #0x01               @ IsRateGT | Lerp<<1 -> r2
+	MOV	r2, r1, lsr #0x02           @ IsRateGT | Lerp<<1 -> r2
 	ADC	r2, r2, r2
 	ADR	r3, .LMixerCore_ADPCM_Init_FrameOpcodePtrs
 	LDRB	r3, [r3, r2]
@@ -62,8 +61,8 @@ ASM_MODE_ARM
 	STRB	r0, [pc, r3, lsl #0x02]
 # endif
 	STR	r6, [sp, #-0x04]!           @ Store Vol (modified by stereo mixer)
-	CMP	lr, #0x02                   @ Handle R channel first as needed
-	BCC	2f
+	@TST	r1, #0x02                   @ Handle R channel first as needed
+	BEQ	2f
 1:	STMFD	sp!, {r4,r6-r9,fp}
 	LDRSH	r2, [r8, #0x18+0x10*1+0x04] @ C1 -> r2
 	LDRSH	r3, [r8, #0x18+0x10*1+0x06] @ C2 -> r3

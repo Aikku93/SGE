@@ -83,7 +83,9 @@ ASM_MODE_ARM
 	MOVS	fp, r7, lsr #(32-FAST_INTERPOLATE_BITS)
 	MULNE	fp, r8, fp
 	ADD	fp, fp, r1, lsl #FAST_INTERPOLATE_BITS
+# if MIX_CLEAR_MASK
 	BIC	fp, fp, #MIX_CLEAR_MASK<<16
+# endif
 	ADD	\Rd, \Rd, fp, lsr #MIX_SHIFT_DOWN
 #endif
 	ADDS	r7, r7, sl, lsl #0x10           @ Position += Rate?
@@ -210,8 +212,10 @@ ASM_MODE_ARM
 .LMixerCore_PCM8_Stereo_RateGT_Lerp_Beg:
 	MOV	fp, #0xFF                       @ 00FF00FFh -> fp
 	ORR	fp, fp, fp, lsl #0x10
+#if MIX_CLEAR_MASK
 	MOV	r6, #MIX_CLEAR_MASK             @ ClearMask | ClearMask<<16 -> r6
 	ORR	r6, r6, r6, lsl #0x10
+#endif
 #if (SGE_PCM8_STEREO_UNROLL > 1)
 	SUBS	r0, r0, #SGE_PCM8_STEREO_UNROLL @ Have enough samples for a block iteration?
 #endif
@@ -230,7 +234,9 @@ ASM_MODE_ARM
 	EOR	r1, r1, r8, lsl #0x10
 	MUL	lr, r8, r3                      @ R *= VolR -> lr
 	MUL	ip, r1, r2                      @ L *= VolL -> ip
+#if MIX_CLEAR_MASK
 	BIC	lr, lr, r6
+#endif
 	EOR	r1, ip, lr, lsl #0x10           @ Swap back to L1|R1<<16 -> r1, L2|R2<<16 -> r8
 	EOR	r8, lr, r1, lsr #0x10
 	LDMIA	r9, {ip,lr}                     @ Wet -> ip,lr
@@ -242,7 +248,11 @@ ASM_MODE_ARM
 	ADDS	r5, r5, #SGE_PCM8_STEREO_UNROLL<<17
 	BLT	1b
 2:	SUBS	r5, r5, #(SGE_PCM8_STEREO_UNROLL-1)<<17 @ Restore nRem. Have at least 1 sample?
+# if MIX_CLEAR_MASK
 	BGE	3f
+# else
+	BGE	RELOC_TARGET(.LMixer_VoxLoop_MixLoop_MixChunk_Tail)
+# endif
 #endif
 20:	PCM8_Stereo_RateGT_Lerp_Fetch r1        @ Dry -> r1
 	AND	r8, r0, r1, lsr #0x18           @ R -> r8
@@ -251,14 +261,19 @@ ASM_MODE_ARM
 	MUL	lr, r8, r3                      @ R *= VolR -> lr
 	LDR	r1, [r9]                        @ Wet -> ip
 	ORR	ip, ip, lr, lsl #0x10           @ L | R<<16
+#if MIX_CLEAR_MASK
 	BIC	ip, ip, #MIX_CLEAR_MASK<<16
+#endif
 	ADD	r1, r1, ip, lsr #MIX_SHIFT_DOWN
 	STR	r1, [r9], #0x04
 #if (SGE_PCM8_STEREO_UNROLL != 2) //! 2 samples/iter would have 1 sample remainder at most
 	ADDS	r5, r5, #0x01<<17               @ --nRem?
 	BCC	20b
 #endif
-3:	ORR	r6, r2, r3, lsl #0x10           @ Restore VolL|VolR<<16 -> r6
+3:
+#if MIX_CLEAR_MASK
+	ORR	r6, r2, r3, lsl #0x10           @ Restore VolL|VolR<<16 -> r6
+#endif
 	B	RELOC_TARGET(.LMixer_VoxLoop_MixLoop_MixChunk_Tail)
 
 .LMixerCore_PCM8_Stereo_RateGT_Lerp_End:

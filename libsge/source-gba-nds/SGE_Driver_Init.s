@@ -18,11 +18,7 @@ SGE_Driver_Init:
 	PUSH	{r4,lr}
 1:	CMP	r1, #0x00                   @ !VoxCnt?
 	BEQ	.LExit_Error
-#if (defined(__GBA__) && SGE_MIXER_VOLFRACBITS > 0)
-	CMP	r1, #(1 << (8-(SGE_MIXER_VOLFRACBITS+1))) @ Too many voices? NOTE: +1 bit because volume can be FFh/80h == 1.99
-#else
 	CMP	r1, #0xFF
-#endif
 	BHI	.LExit_Error
 	LSR	r4, r2, #0x06               @ RateHz too low (<8000Hz) or too high?
 	CMP	r4, #(8000 >> 6)

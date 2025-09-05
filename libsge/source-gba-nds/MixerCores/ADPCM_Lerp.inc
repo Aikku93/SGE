@@ -37,7 +37,9 @@ ASM_MODE_ARM
 	ADD	r8, r1, r8, asr #0x08+1
 	ADDS	r8, r5, r8, asr #0x08
 	MULNE	r8, r6, r8
+#if MIX_CLEAR_MASK
 	BIC	r8, r8, #MIX_CLEAR_MASK<<16
+#endif
 	ADDS	r7, r7, sl, lsl #0x10     @ Position += Rate?
 	ADD	ip, ip, r8, lsr #MIX_SHIFT_DOWN
 	STR	ip, [r9], #0x04
@@ -90,7 +92,9 @@ ASM_MODE_ARM
 	ADDS	r8, r5, r8, asr #0x08
 	MULNE	r8, r6, r8
 	ADD	r7, r7, sl                @ Position += Rate
+#if MIX_CLEAR_MASK
 	BIC	r8, r8, #MIX_CLEAR_MASK<<16
+#endif
 	ADD	ip, ip, r8, lsr #MIX_SHIFT_DOWN
 	STR	ip, [r9], #0x04
 2:	MUL	ip, r1, r3                @ Decode next sample

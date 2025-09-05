@@ -57,7 +57,9 @@ ASM_MODE_ARM
 	ADD	r7, r7, sl                        @ Position += Rate
 .endm
 .macro PCM8_Mono_NoLerp_Mix Rd, Rs
+#if MIX_CLEAR_MASK
 	BIC	\Rs, \Rs, #MIX_CLEAR_MASK<<16
+#endif
 	ADD	\Rd, \Rd, \Rs, lsr #MIX_SHIFT_DOWN
 .endm
 

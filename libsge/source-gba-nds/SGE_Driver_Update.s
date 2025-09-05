@@ -40,7 +40,7 @@
 //! after a voice has pushed r4,r5 for processing inside the
 //! voice update loop.
 #ifdef __GBA__
-# define MIX_SHIFT_DOWN (7 - SGE_MIXER_VOLFRACBITS)
+# define MIX_SHIFT_DOWN (SGE_MIXER_VOLBITS - SGE_MIXER_VOLFRACBITS)
 # define MIX_CLEAR_MASK ((1 << MIX_SHIFT_DOWN)-1)
 # if SGE_USE_VOLSUBDIV
 #  define VOLSTEP_DIVCOUNT_SP_OFFS (0x18 + 0x04*(1<<SGE_VOLSUBDIV_LOG2MAXSUBDIV)) //! Above the bias levels
@@ -1286,6 +1286,7 @@ ASM_MODE_ARM
 	CMP	sl, #0x01<<16
 	ADC	r0, r0, r0
 # endif
+	STR	r0, .LMixerCore_MixFormat
 	CMP	ip, #SGE_WAV_FRMT_CNT      @ Sanity check Wav.Frmt, Wav.Chan
 	CMPCC	lr, #SGE_WAV_CHAN_MAX+1
 	LDRCC	r2, =SGE_Driver_MixerTables
@@ -1813,7 +1814,7 @@ ASM_MODE_ARM
 .LMixer_VoxLoop_MixLoop_ApplySilence:
 1:	LDR	ip, [r9]                  @ Add bias to remaining samples
 	SUBS	r0, r0, #0x01
-	ADD	ip, ip, r6, lsl #SGE_MIXER_VOLFRACBITS
+	ADD	ip, ip, r6, lsl #SGE_MIXER_VOLFRACBITS + (7 - SGE_MIXER_VOLBITS)
 	STR	ip, [r9], #0x04
 	BNE	1b
 0:	BX	lr
@@ -2193,6 +2194,7 @@ ASM_MODE_ARM
 3:	LDMFD	sp!, {r3-sl,lr,pc}
 
 .LMixerCore_WorkAreaType: .word 0
+.LMixerCore_MixFormat:    .word 0
 .LMixerCore_WorkArea:
 	.space SGE_Driver_MixerCore_WorkAreaSize
 
