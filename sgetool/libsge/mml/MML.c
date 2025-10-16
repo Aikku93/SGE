@@ -523,6 +523,10 @@ int MML_CreateLabel(
 	Label->InputOffs         = *LabelNameOffs;
 	MML->nLabels = ThisIdx+1;
 
+	//! Reset running state, or commands such
+	//! as MML_CMD_NOTE_LASTRUN can break!
+	MML_ResetRunningState(MML);
+
 	//! Prepare for pattern/repeat labels
 	if(LabelType == MML_LABEL_TYPE_PATTERN || LabelType == MML_LABEL_TYPE_REPEAT) {
 		//! Check current nesting level
@@ -531,8 +535,7 @@ int MML_CreateLabel(
 			return MML_ERROR;
 		}
 
-		//! Reset running state and propagate nesting
-		MML_ResetRunningState(MML);
+		//! Propagate nesting
 		MML->State.NestedLabelIdxList[MML->State.NestLevel_Current++] = ThisIdx;
 		switch(LabelType) {
 			case MML_LABEL_TYPE_PATTERN: {
