@@ -31,12 +31,10 @@ int main(int argc, const char *argv[]) {
 	(void)argv;
 
 	int nTicks;
-	int LastNonZero = 0;
 	FILE *OutputFile = fopen("TickTimeCodeLUT.txt", "wt");
 	for(nTicks=1;nTicks<=768;nTicks++) {
 		int      BestCost = 1000;
 		uint32_t BestCode = 0;
-		uint32_t OrigBestCode = 0;
 		int a, b, c, d;
 		for(a=0;a<nCodes;a++) for(b=0;b<nCodes;b++) for(c=0;c<nCodes;c++) for(d=0;d<nCodes;d++) {
 			int Duration = 0, Cost = 0;
@@ -45,9 +43,9 @@ int main(int argc, const char *argv[]) {
 			uint8_t bCode = Codes[b].Code;
 			uint8_t cCode = Codes[c].Code;
 			uint8_t dCode = Codes[d].Code;
-			if(a && (b || c || d)) aCode += aCode == 0xEE ? 1 : 7;
-			if(b && (     c || d)) bCode += bCode == 0xEE ? 1 : 7;
-			if(c && (          d)) cCode += cCode == 0xEE ? 1 : 7;
+			if(a && (b || c || d)) aCode += aCode == 0xEE ? 1 : aCode >= 0xE ? 0x70 : 7;
+			if(b && (     c || d)) bCode += bCode == 0xEE ? 1 : bCode >= 0xE ? 0x70 : 7;
+			if(c && (          d)) cCode += cCode == 0xEE ? 1 : cCode >= 0xE ? 0x70 : 7;
 #define ADD(x) do { \
 		Code |= x##Code << (Cost*4); \
 		Duration += Codes[x].Ticks; \
@@ -60,19 +58,16 @@ int main(int argc, const char *argv[]) {
 			if(Duration == nTicks && Cost < BestCost) {
 				BestCost = Cost;
 				BestCode = Code;
-				OrigBestCode = Codes[a].Code | Codes[b].Code<<8 | Codes[c].Code<<16 | Codes[d].Code<<24;
 			}
 		}
 		if(BestCost > 4) BestCost = 0, BestCode = 0;
-		if(nTicks == 192+96) printf("cost = %u, code = %04X / %04X\n", BestCost, BestCode, OrigBestCode);
 		fprintf(
 			OutputFile,
-			"0x%02X,0x%02X,0x%02X",
+			"{%d,0x%02X,0x%02X}",
 			BestCost,
 			(BestCode >> 0) & 0xFF,
 			(BestCode >> 8) & 0xFF
 		);
-		if(BestCost != 0) LastNonZero = nTicks;
 		if((nTicks%4) == 0) fprintf(OutputFile, ",\n\t");
 		else fprintf(OutputFile, ", ");
 	}
