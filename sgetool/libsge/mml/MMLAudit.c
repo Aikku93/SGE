@@ -543,7 +543,7 @@ BEGIN_COMMAND(8h) {
 	}
 
 	//! Bh: Relative change
-	int Delta = Track_ReadNybble(Track);
+	int Delta = (Track_ReadNybble(Track) ^ 8) - 8; //! <- Sign expand
 	Delta = (Delta < 0) ? (Delta-2) : (Delta+3); //! -10..+10 octaves change
 	if(Track_OctaveChange(MML, Track, Delta * 12) == MML_ERROR) {
 		MML_AppendErrorContext(MML, "Audit: While processing octave-change command (8h,Bh):");

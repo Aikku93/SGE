@@ -196,7 +196,7 @@ static int MML_FlushPendingCommands(struct MML_t *MML, int SkipSingleOctaveDelta
 		while(Delta <= -3) {
 			int t = Delta+2; if(t < -8) t = -8;
 			WRITE_COMMAND(MML_CMD_OCTAVE_RELATIVE);
-			if(MML_WriteNybble(MML, (uint8_t)t) == MML_ERROR) return MML_ERROR;
+			if(MML_WriteNybble(MML, (uint8_t)((t+8)^8)) == MML_ERROR) return MML_ERROR;
 			Delta -= t-2;
 		}
 		if(Delta >= +2) {
