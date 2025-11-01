@@ -14,13 +14,13 @@
 #define NOTESTACK_OCTAVE_DOWN 0x0D
 #define NOTESTACK_OCTAVE_SET  0x0E //! 0Eh..18h
 struct MML_Command_NoteStack_Entry_t {
-	uint8_t  Key:7;
-	uint8_t  VelOverride:1;
-	uint8_t  Velocity; //! Bit0 = Sticky
+	uint8_t Key;
+	uint8_t Velocity; //! 0 = No override
 };
 struct MML_Command_NoteStack_t {
-	uint8_t  Size;
-	uint8_t  Overlay;
+	uint8_t  Size:7;
+	uint8_t  Overlay:1;
+	uint8_t  Velocity; //! 0 = No override
 	uint16_t Duration;
 	struct MML_Command_NoteStack_Entry_t Notes[MML_MAXIMUM_NOTESTACK_SIZE];
 };
@@ -109,6 +109,7 @@ static int MML_WriteNoteStack(struct MML_t *MML, const struct MML_Command_NoteSt
 	}
 
 	//! Dump all notes/commands for this stack
+	uint8_t  IsStickyVelocityWritten = 0;
 	uint32_t OutputStackSize = 1;
 	uint32_t nNotesRem = nNotes;
 	const struct MML_Command_NoteStack_Entry_t *CurEntry = Stack->Notes;
@@ -150,11 +151,36 @@ static int MML_WriteNoteStack(struct MML_t *MML, const struct MML_Command_NoteSt
 		}
 
 		//! Check for velocity override
-		if(CurEntry->VelOverride) {
+		uint8_t IsStickyOverride = 0;
+		int Velocity = CurEntry->Velocity;
+		if(!IsStickyVelocityWritten && (!Velocity || Velocity == Stack->Velocity)) {
+			//! We write the sticky velocity either as soon as
+			//! we have a default-velocity note, or when the
+			//! note velocity override matches the stack's.
+			//! Note that this triggers even if we have no
+			//! overrides at all, but IsStickyVelocityWritten
+			//! will not be set because we had no override.
+			Velocity = Stack->Velocity;
+			if(nNotesRem > 1) IsStickyOverride = 1;
+		} else if(IsStickyVelocityWritten && Velocity == Stack->Velocity) {
+			//! If we've already written the sticky velocity,
+			//! and the velocity override matches that of the
+			//! default velocity, we can safely remove this
+			//! note's velocity override.
+			Velocity = 0;
+		}
+		if(Velocity) {
+			//! Apply bias and set sticky flag as needed
+			Velocity = (Velocity-1) << 1;
+			if(IsStickyOverride) {
+				Velocity |= 1;
+				IsStickyVelocityWritten = 1;
+			}
+
 			//! Issue a velocity change command
 			if(
 				MML_WriteCommandData(MML, MML_CMD_NOTE_VELOCITY) == MML_ERROR ||
-				MML_WriteByte       (MML, CurEntry->Velocity) == MML_ERROR
+				MML_WriteByte       (MML, (uint8_t)Velocity) == MML_ERROR
 			) return MML_ERROR;
 		}
 

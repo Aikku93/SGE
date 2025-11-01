@@ -146,12 +146,12 @@ less than 256 ticks, and is specified in standard note duration notation (eg.
 
 Finally, each note may also carry a velocity associated with it. This velocity
 can be set to apply to that note only, or to become "sticky" and apply to all
-further notes, as though a `v` command had been used. This is achieved by
-appending a `=` character immediately after the note (and its duration, if any)
-followed by the velocity to use (1..128). If the velocity needs to "stick", a
-`!` character may be appended after the velocity value (eg. `{ce=64g}` will
-override the velocity only for the E note, whereas `{ce=64!g}` overrides the
-velocity for the E note, and uses it for all notes that follow).
+notes in a note stack. This is achieved by appending a `=` symbol immediately
+after the note (and its duration, if any), followed by the velocity to use for
+that note or note stack (1..128). Individual notes within a stack may also be
+overriden even with a sticky override on the stack. For example, `{ce=64g}`
+will apply a velocity override to the E note, whereas `{ce=64g}=100` applies
+an override of 100 to both C and G notes, but an override of 64 for the E.
 
 Multiple notes may be played simultaneously. The syntax for this is to enclose
 all notes inside curly braces (eg. `{ceg}`); all notes inside the braces are

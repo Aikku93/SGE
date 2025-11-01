@@ -667,7 +667,7 @@ ASM_ALIGN(4)
 @ r8: &Tone
 @ r9:  RestAfterNote
 @ sl:  Vel
-@ fp:  Transpose
+@ fp:  DefaultVelocity
 @ sp+00h:  nTicks-1
 @ sp+04h:  nTracksRem
 @ sp+08h: &Player
@@ -678,26 +678,26 @@ ASM_ALIGN(4)
 
 .LReadNoteCommand:
 	PUSH	{r0,r5}
+	LDRB	r0, [r4, #0x0C+2] @ DefaultVelocity = Track.Vel -> fp
 	MOV	r5, #0x01         @ nNotesRem = 1
 	MOV	r9, r5            @ RestAfterNote = TRUE
+	MOV	fp, r0
 
 .LReadNoteCommandLoop_ResetVelocity:
-	MOV	r1, #0x05
-	LDRSB	r1, [r4, r1]      @ Transpose -> fp
-	LDRB	r0, [r4, #0x0C+2] @ Vel = Track.Vel -> sl
-	MOV	sl, r0
-	MOV	fp, r1
+	MOV	sl, fp            @ Vel = DefaultVelocity -> sl
 
 .LReadNoteCommandLoop:
 	FETCH_NYBBLE
 	CMP	r0, #0x0C
 	BCS	.LReadNoteCommand_ControlCode
-0:	LDRB	r3, [r4, #0x04]   @ Note += Octave
-	MOV	r1, r8            @ Tone -> r1?
-	ADD	r0, fp            @ Note += Transpose?
-	ADD	r0, r3
+0:	MOV	r2, #0x05
+	LDRSB	r2, [r4, r2]      @ Transpose -> r2
+	LDRB	r3, [r4, #0x04]   @ Octave -> r3
+	ADD	r0, r2            @ Note += Transpose
+	ADD	r0, r3            @ Note += Octave?
 	CMP	r0, #0x7F
 	BHI	.LReadNoteCommandLoop_NoteOn_Finish
+	MOV	r1, r8            @ Tone -> r1?
 	CMP	r1, #0x00
 	BEQ	.LReadNoteCommandLoop_NoteOn_Finish
 0:	LDRB	r2, [r1, #0x03]   @ nLayersRem = Tone.nLayer -> r2
@@ -818,8 +818,7 @@ ASM_ALIGN(4)
 	LSR	r0, #0x01          @ Vel = ReadByte() >> 1
 	MOV	sl, r0
 	BCC	.LReadNoteCommandLoop
-1:	STRB	r0, [r4, #0x0C+2]  @ Sticky: Track.Vel.{Value,Target} = Vel
-	STRB	r0, [r4, #0x0C+3]
+1:	MOV	fp, r0             @ Sticky: DefaultVelocity = Vel
 	B	.LReadNoteCommandLoop
 
 @ r1: Octave

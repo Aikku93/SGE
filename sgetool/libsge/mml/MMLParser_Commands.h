@@ -106,8 +106,8 @@ static int MML_Command_Note_TranslateNoteLetterToKey(struct MML_t *MML, int Note
 	return Key;
 }
 static int MML_Command_Note_ParseVelocityOverride(struct MML_t *MML) {
-	//! 0 = No override. Otherwise: Bit0 = Sticky, Bit1... = Velocity.
-	//! To write to output, the bias needs to be applied (ie. Velocity -= 1<<1).
+	//! 0 = No override. Otherwise: Velocity.
+	//! To write to output, the bias needs to be applied (ie. Velocity -= 1).
 	int32_t Velocity = 0;
 	if(MML_PeekNextChar(MML) == '=') {
 		MML_ConsumeChars(MML, 1, 0);
@@ -122,13 +122,6 @@ static int MML_Command_Note_ParseVelocityOverride(struct MML_t *MML) {
 		if(Velocity < 1 || Velocity > 128) {
 			MML_AppendError(MML, "Immediate velocity out of range (must be 1..128).", &VelocityOffs);
 			return MML_ERROR;
-		}
-
-		//! Shift up and combine with Sticky bit
-		Velocity <<= 1;
-		if(MML_PeekNextChar(MML) == '!') {
-			MML_ConsumeChars(MML, 1, 0);
-			Velocity |= 1;
 		}
 	}
 	return Velocity;
@@ -187,9 +180,8 @@ static int MML_Command_Note_ReadNoteToStack(
 	}
 
 	//! Place note in stack
-	Stack->Notes[Stack->Size].Key         = Key;
-	Stack->Notes[Stack->Size].VelOverride = (Velocity == 0) ? 0 : 1;
-	Stack->Notes[Stack->Size].Velocity    = (uint8_t)(Velocity - (1<<1));
+	Stack->Notes[Stack->Size].Key      = (uint8_t)Key;
+	Stack->Notes[Stack->Size].Velocity = (uint8_t)Velocity;
 	Stack->Size++;
 
 	//! Restore octave as needed
@@ -220,8 +212,9 @@ static int MML_Command_Note(struct MML_t *MML, int NoteLetter) {
 	//! NOTE: If we got a stack command, then NoteLetter will be 0
 	int nNotes = 0;
 	struct MML_Command_NoteStack_t Stack;
-	Stack.Size    = 0;
-	Stack.Overlay = 0;
+	Stack.Size     = 0;
+	Stack.Overlay  = 0;
+	Stack.Velocity = 0;
 	if(NoteLetter) {
 		if(MML_Command_Note_ReadNoteToStack(MML, &Stack, NoteLetter, 0) == MML_ERROR) {
 			MML_AppendErrorContext(MML, "While parsing note command:");
@@ -289,6 +282,11 @@ static int MML_Command_Note(struct MML_t *MML, int NoteLetter) {
 		return MML_ERROR;
 	}
 
+	//! Warn on stacked single note
+	if(!NoteLetter && nNotes == 1) {
+		MML_AppendWarning(MML, "Note stack with single note; suggest removing `{}`.", &CommandOffs);
+	}
+
 	//! Parse duration
 	int Duration = MML_ReadDuration(MML);
 	if(Duration == MML_ERROR) {
@@ -297,23 +295,10 @@ static int MML_Command_Note(struct MML_t *MML, int NoteLetter) {
 	}
 	Stack.Duration = (uint16_t)(Duration - 1);
 
-	//! Check for a single-note velocity override
-	//! This is a special case needed to make the syntax less awkward.
-	//! With this hack, we can write:
-	//!  a16=50
-	//! Whereas without it, we would need to write something like:
-	//!  a=50 16
-	//! which would come up as invalid due to the whitespace being
-	//! treated as the end of the note command.
-	if(NoteLetter) {
-		//! NOTE: We have to index at Size-1 rather than just assume
-		//! that the note is in slot 0, because we might have octave
-		//! change commands /before/ the note itself.
-		int32_t Velocity = MML_Command_Note_ParseVelocityOverride(MML);
-		if(Velocity == MML_ERROR) return MML_ERROR;
-		Stack.Notes[Stack.Size-1].VelOverride = (Velocity == 0) ? 0 : 1;
-		Stack.Notes[Stack.Size-1].Velocity    = (uint8_t)(Velocity - (1<<1));
-	}
+	//! Check for velocity override
+	int32_t Velocity = MML_Command_Note_ParseVelocityOverride(MML);
+	if(Velocity == MML_ERROR) return MML_ERROR;
+	Stack.Velocity = (uint8_t)Velocity;
 
 	//! Is this stack an overlay?
 	if(MML_PeekNextChar(MML) == '_') {

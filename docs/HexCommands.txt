@@ -407,9 +407,10 @@ command that this flag resides in).
 
 Velocity change (Fh,0h,Xh,Yh) sets the velocity for the proceeding note[s]. The
 value is unpacked as Yh|Xh<<4, with the following interpretation:
- Bit0:    Sticky   (0 = Only for the following note, 1 = Save to state)
+ Bit0:    Sticky   (0 = Only for the following note, 1 = Use for all remaining)
  Bit1..7: Velocity (0..127 = 1..128)
-Note that Sticky will disable any velocity ramp currently operating.
+Note that Sticky will NOT override the track's velocity, and only applies to
+the note stack being processed.
 
 Octave change (Fh,1h..Bh) is self-explanatory. Octave 5 (Fh,6h) selects the
 middle-C/A440 octave, corresponding to MIDI notes 60..71.
