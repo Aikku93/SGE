@@ -2,6 +2,13 @@
 ASM_MODE_ARM
 /************************************************/
 
+//! Enabling this option will use LDR instead of LDRB
+//! for the Rate < 1.0 loop, which can be much faster
+//! if Rate is known to be above ~0.6 or so.
+#define PREFER_WIDE_LOAD 1
+
+/************************************************/
+
 @ Input:
 @  r0:  N
 @  r1:
@@ -61,14 +68,30 @@ ASM_MODE_ARM
 	BIC	r3, r3, #MIX_CLEAR_MASK<<16
 #endif
 	ADD	\Rd, \Rd, r3, lsr #MIX_SHIFT_DOWN
+#if PREFER_WIDE_LOAD // 12*Rate/4 + 5*(1-Rate/4) = 5 + 1.75*Rate (assuming N=3,S=1)
+	MOVCS	r5, r5, ror #0x08             @ Put next sample in uppermost bits
+	ADDCS	r1, r1, r2                    @  Ra += (Rb-Ra) -> Ra = Rb -> r1
+	RSBCS	r2, r1, r5, lsr #0x18         @  Rb-Ra -> r2
+	ADDCSS	r4, r4, #0x01<<(32-2)         @  Count up samples. Need to reload?
+	LDRCS	r5, [r4, #0x04]!              @   Y: Load next 4 samples
+#else //! 8*Rate + 3*(1-Rate) = 3 + 5*Rate (assuming N=3,S=1)
 	LDRCSB	r3, [r4, #0x01]!              @  New Rb -> r3
 	ADDCS	r1, r1, r2                    @  Ra += (Rb-Ra) -> Ra = Rb -> r1
 	SUBCS	r2, r3, r1                    @  Rb-Ra -> r2
+#endif
 .endm
 
 .LMixerCore_PCM8_Mono_RateLT_Lerp_Beg:
 	LDRB	r1, [r4, r7, lsr #0x10]!      @ Ra -> r1, and set Src pointer
 	LDRB	r2, [r4, #0x01]!              @ Rb -> r2, and pre-advance Src
+#if PREFER_WIDE_LOAD
+	ADD	r4, r4, #0x01                 @ Load aligned word for next sample -> r5
+	AND	r3, r4, #0x03
+	LDR	r5, [r4, -r3]!
+	ADD	r4, r4, r3, lsl #0x20-2       @ Pack counter into high bits of Src
+	MOVS	r3, r3, lsl #0x03             @ Rotate to correct sample
+	MOVNE	r5, r5, ror r3
+#endif
 	MOV	r7, r7, lsl #0x10             @ Shift up Position
 #if (SGE_PCM8_MONO_UNROLL > 1)
 	SUBS	r0, r0, #SGE_PCM8_MONO_UNROLL @ Have enough samples for a block iteration?
@@ -96,7 +119,14 @@ ASM_MODE_ARM
 	SUBS	r0, r0, #0x01
 	BNE	20b
 3:	MOV	r7, r7, lsr #0x10             @ Restore Position
-	SUB	r4, r4, #0x01                 @ Rewind pre-advance
+#if PREFER_WIDE_LOAD
+	MOV	r3, r4, lsr #0x20-2           @ Advance Src by word offset
+	ADD	r4, r4, r3
+	BIC	r4, r4, r3, lsl #0x20-2
+	SUB	r4, r4, #0x02                 @ Rewind pre-advance
+#else
+	SUB	r4, r4, #0x01
+#endif
 	B	RELOC_TARGET(.LMixer_VoxLoop_MixLoop_MixChunk_Tail)
 
 .LMixerCore_PCM8_Mono_RateLT_Lerp_End:
@@ -192,6 +222,10 @@ ASM_MODE_ARM
 .endif
 
 #undef RELOC_TARGET
+
+/************************************************/
+
+#undef PREFER_WIDE_LOAD
 
 /************************************************/
 //! EOF
